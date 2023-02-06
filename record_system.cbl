@@ -1,38 +1,41 @@
+      ******************************************************************
+      * Author: Marquez Cristian Ariel
+      * Date: 05/02/2023
+      * Purpose: Registro de Usuarios y trabajos en Computadoras
+      * Tectonics: cobc
+      ******************************************************************
        IDENTIFICATION DIVISION.
-       PROGRAM-ID. CREATE-FILES.
+       PROGRAM-ID. Record_System.
        ENVIRONMENT DIVISION.
        INPUT-OUTPUT SECTION.
 
        FILE-CONTROL.
-       SELECT OPTIONAL EMPLEADOS-ARCHIVO
-       ASSIGN TO "C:\Desarrollos\Record_System\empleados.dat"
+       SELECT OPTIONAL CUSTOMERS-FILE
+       ASSIGN TO "C:\Desarrollos\Record_System\customers.dat"
        ORGANIZATION IS LINE SEQUENTIAL.
 
        DATA DIVISION.
        FILE SECTION.
-       FD EMPLEADOS-ARCHIVO.
-           01 EMPLEADOS-REGISTRO.
-               05 EMPLEADOS-ID PIC X(6).
-               05 EMPLEADOS-NOMBRE PIC X(25).
-               05 EMPLEADOS-APELLIDOS PIC X(35).
-               05 EMPLEADOS-EDAD PIC X(3).
-               05 EMPLEADOS-TELEFONO PIC X(9).
-               05 EMPLEADOS-DIRECCION PIC X(35).
+       FD CUSTOMERS-FILE.
+           01 CUSTOMERS-REGISTERS.
+               05 CUSTOMERS-ID PIC X(4).
+               05 CUSTOMERS-DNI PIC X(8).
+               05 CUSTOMERS-NAME PIC X(25).
+               05 CUSTOMERS-CELLPHONE PIC X(11).
+               05 CUSTOMERS-EMAIL PIC X(50).
+               05 CUSTOMERS-ADDRESS PIC X(35).
 
        WORKING-STORAGE SECTION.
-
-       01  IDENTIFICADOR PIC X(36)
-           VALUE "Introduce un ID del nuevo empleado: ".
-       01  NOMBRE PIC X(33)
-           VALUE "Introduce un nombre de empleado: ".
-       01  APELLIDOS PIC X(25)
-           VALUE "Introduce los apellidos: ".
-       01  EDAD PIC X(19)
-           VALUE "Introduce la edad: ".
-       01  TELEFONO PIC X(33)
-           VALUE "Introduce un número de teléfono: ".
+       01  DNI PIC X(19)
+           VALUE "Introduzca el DNI: ".
+       01  NOMBRE PIC X(25)
+           VALUE "Introduzca el nombre: ".
+       01  TELEFONO PIC X(34)
+           VALUE "Introduzca el numero de telefono: ".
+       01  EMAIL PIC X(50)
+           VALUE "Introduzca el Email: ".
        01  DIRECCION PIC X(25)
-           VALUE "Introduce una dirección: ".
+           VALUE "Introduzca la direccion: ".
 
        01  SI-NO PIC X.
        01  ENTRADA PIC X.
@@ -51,10 +54,10 @@
        STOP RUN.
 
        PROCEDIMIENTO-DE-APERTURA.
-       OPEN EXTEND EMPLEADOS-ARCHIVO.
+       OPEN EXTEND CUSTOMERS-FILE.
 
        PROCEDIMIENTO-DE-CIERRE.
-       CLOSE EMPLEADOS-ARCHIVO.
+       CLOSE CUSTOMERS-FILE.
 
        AGREGAR-REGISTROS.
        MOVE "N" TO ENTRADA.
@@ -64,28 +67,26 @@
        PERFORM REINICIAR.
 
        OBTENER-CAMPOS.
-       MOVE SPACE TO EMPLEADOS-REGISTRO.
-       DISPLAY IDENTIFICADOR " ? ".
-       ACCEPT EMPLEADOS-ID.
-       DISPLAY NOMBRE " ? ".
-       ACCEPT EMPLEADOS-NOMBRE.
-       DISPLAY APELLIDOS " ? ".
-       ACCEPT EMPLEADOS-APELLIDOS.
-       DISPLAY EDAD " ? ".
-       ACCEPT EMPLEADOS-EDAD.
-       DISPLAY TELEFONO "?".
-       ACCEPT EMPLEADOS-TELEFONO
+       MOVE SPACE TO CUSTOMERS-REGISTERS.
+       DISPLAY DNI.
+       ACCEPT CUSTOMERS-DNI.
+       DISPLAY NOMBRE.
+       ACCEPT CUSTOMERS-NAME.
+       DISPLAY TELEFONO.
+       ACCEPT CUSTOMERS-CELLPHONE.
+       DISPLAY EMAIL.
+       ACCEPT CUSTOMERS-EMAIL.
        DISPLAY DIRECCION.
-       ACCEPT EMPLEADOS-DIRECCION.
+       ACCEPT CUSTOMERS-ADDRESS.
        PERFORM CONTINUAR.
 
        CONTINUAR.
        MOVE "S" TO ENTRADA.
-       IF  EMPLEADOS-NOMBRE = SPACE
+       IF  CUSTOMERS-NAME = SPACE
        MOVE "N" TO ENTRADA.
 
        ESCRIBIR-REGISTRO.
-       WRITE EMPLEADOS-REGISTRO.
+       WRITE CUSTOMERS-REGISTERS.
 
        REINICIAR.
        DISPLAY "¿Desea almacenar otro registro en la base de datos?".
@@ -95,4 +96,4 @@
        IF SI-NO NOT = "S"
        MOVE "N" TO SI-NO.
 
-       END PROGRAM CREATE-FILES.
+       END PROGRAM Record_System.

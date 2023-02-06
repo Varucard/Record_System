@@ -1,0 +1,6 @@
+Lista de Tareas
+
+- Trabajar multiples archivos en un unico codigo.
+- Desarrollar los archivos de presupuestos/pagos y equipos de clientes.
+- Desarrollar pantalla de Inicio.
+- Desarrollar sistema de creacion/verificacion de archivos .dat.
