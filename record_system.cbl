@@ -95,9 +95,8 @@
            VALUE "Introduzca la forma de pago: ".
        01  FECHA PIC X(37)
            VALUE "Introduzca la fecha del presupuesto: ".
-       01  PAGADO PIC X(1000)
-           VALUE "Introduzca '1' si esta pagado el trabajo o '0'si no"
-           " lo esta: ".
+       01  PAGADO PIC X(20)
+           VALUE "Introduzca '1' o '0'".
 
        01  SI-NO PIC X.
        01  ENTRADA PIC X.
@@ -106,20 +105,38 @@
        MAIN-LOGIC SECTION.
        PROGRAM-BEGIN.
 
-       PERFORM PROCEDIMIENTO-DE-APERTURA.
+       PERFORM APERTURA-CLIENTES.
+       PERFORM APERTURA-EQUIPOS.
+       PERFORM APERTURA-PRESUPUESTOS.
        MOVE "S" TO SI-NO.
        PERFORM AGREGAR-REGISTROS
        UNTIL SI-NO = "N".
-       PERFORM PROCEDIMIENTO-DE-CIERRE.
+       PERFORM CIERRE-CLIENTES.
+       PERFORM CIERRE-EQUIPOS.
+       PERFORM CIERRE-PRESUPUESTOS.
 
        PROGRAM-DONE.
        STOP RUN.
 
-       PROCEDIMIENTO-DE-APERTURA.
+      *Apertura de Archivos, si no se encuentran los crea
+       APERTURA-CLIENTES.
        OPEN EXTEND CUSTOMERS-FILE.
 
-       PROCEDIMIENTO-DE-CIERRE.
+       APERTURA-EQUIPOS.
+       OPEN EXTEND EQUIPMENTS-FILE.
+
+       APERTURA-PRESUPUESTOS.
+       OPEN EXTEND BUDGETS-FILE.
+
+      *Cierre de Archivos
+       CIERRE-CLIENTES.
        CLOSE CUSTOMERS-FILE.
+
+       CIERRE-EQUIPOS.
+       CLOSE EQUIPMENTS-FILE.
+
+       CIERRE-PRESUPUESTOS.
+       CLOSE BUDGETS-FILE.
 
        AGREGAR-REGISTROS.
        MOVE "N" TO ENTRADA.
