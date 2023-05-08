@@ -5,7 +5,7 @@
 
        FILE-CONTROL.
        SELECT OPTIONAL EMPLEADOS-ARCHIVO
-       ASSIGN TO "g:\cobol\empleados.dat"
+       ASSIGN TO "C:\Desarrollos\Record_System\original_code\empleados.dat"
        ORGANIZATION IS LINE SEQUENTIAL.
 
        DATA DIVISION.
@@ -70,6 +70,7 @@
            MOVE EMPLEADOS-TELEFONO TO MUESTRA-TELEFONO.
            MOVE EMPLEADOS-DIRECCION TO MUESTRA-DIRECCION.
            DISPLAY PRESENTACION.
+           DISPLAY ADD MUESTRA-ID TO "1".
            ADD 1 TO MAXIMO-REGISTROS.
 
            LEE-SIGUIENTE-REGISTRO.
