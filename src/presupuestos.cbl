@@ -1,7 +1,7 @@
       ******************************************************************
       * Purpose: Presupuestos de trabajos sobre equipos y registro de
-      *          pagos (alta, consulta, listados, pago, modificación y
-      *          baja).
+      *          pagos (alta, consulta, listados, pago, modificación,
+      *          baja, estado de cuenta por cliente y comprobantes).
       * Parámetros:
       *   LK-DIRECTORIO-DATOS (entrada)  directorio de los .dat
       ******************************************************************
@@ -17,12 +17,16 @@
            COPY "fc-customers.cpy".
            COPY "fc-equipments.cpy".
            COPY "fc-budgets.cpy".
+           COPY "fc-control.cpy".
+           COPY "fc-texto.cpy".
 
        DATA DIVISION.
        FILE SECTION.
            COPY "fd-customers.cpy".
            COPY "fd-equipments.cpy".
            COPY "fd-budgets.cpy".
+           COPY "fd-control.cpy".
+           COPY "fd-texto.cpy".
 
        WORKING-STORAGE SECTION.
            COPY "ws-archivos.cpy".
@@ -31,10 +35,13 @@
            88 FILTRO-TODOS             VALUE "T".
            88 FILTRO-EQUIPO            VALUE "E".
            88 FILTRO-PENDIENTES        VALUE "P".
+           88 FILTRO-CLIENTE           VALUE "C".
        01  WS-FILTRO-EQUIPO            PIC 9(5).
        01  WS-TOTAL-LISTADO            PIC 9(11)V99.
        01  WS-TOTAL-LISTADO-ED         PIC ZZ.ZZZ.ZZZ.ZZ9,99.
        01  WS-TEXTO-PAGADO             PIC X(9).
+       01  WS-FILTRO-DNI               PIC X(8).
+       01  WS-TOTAL-PENDIENTE          PIC 9(11)V99.
 
        LINKAGE SECTION.
            COPY "lk-comun.cpy".
@@ -42,13 +49,15 @@
        PROCEDURE DIVISION USING LK-DIRECTORIO-DATOS.
        INICIO-PRESUPUESTOS.
            PERFORM ARMAR-RUTAS
-           OPEN I-O BUDGETS-FILE
+           PERFORM INICIAR-INTERFAZ
+           OPEN I-O BUDGETS-FILE CONTROL-FILE
            OPEN INPUT CUSTOMERS-FILE EQUIPMENTS-FILE
            IF NOT FS-BUDGETS-OK OR NOT FS-CUSTOMERS-OK
-              OR NOT FS-EQUIPMENTS-OK
+              OR NOT FS-EQUIPMENTS-OK OR NOT FS-CONTROL-OK
                DISPLAY "Error al abrir los archivos (file status "
                        WS-FS-BUDGETS "/" WS-FS-CUSTOMERS "/"
-                       WS-FS-EQUIPMENTS ")." END-DISPLAY
+                       WS-FS-EQUIPMENTS "/" WS-FS-CONTROL ")."
+               END-DISPLAY
                PERFORM CERRAR-ARCHIVOS
                GOBACK
            END-IF
@@ -58,10 +67,9 @@
            GOBACK.
 
        MENU-PRESUPUESTOS.
-           DISPLAY " " END-DISPLAY
-           DISPLAY WS-SEPARADOR-DOBLE END-DISPLAY
-           DISPLAY "  PRESUPUESTOS Y PAGOS" END-DISPLAY
-           DISPLAY WS-SEPARADOR-DOBLE END-DISPLAY
+           PERFORM PREPARAR-PANTALLA
+           MOVE "PRESUPUESTOS Y PAGOS" TO WS-TITULO
+           PERFORM MOSTRAR-TITULO
            DISPLAY "  1. Crear presupuesto" END-DISPLAY
            DISPLAY "  2. Consultar presupuesto" END-DISPLAY
            DISPLAY "  3. Listar todos los presupuestos" END-DISPLAY
@@ -71,11 +79,15 @@
            DISPLAY "  6. Registrar pago" END-DISPLAY
            DISPLAY "  7. Modificar presupuesto" END-DISPLAY
            DISPLAY "  8. Eliminar presupuesto" END-DISPLAY
+           DISPLAY "  9. Estado de cuenta de un cliente" END-DISPLAY
+           DISPLAY " 10. Generar comprobante (presupuesto o recibo)"
+           END-DISPLAY
            DISPLAY "  0. Volver al menú principal" END-DISPLAY
            MOVE "Opción:" TO WS-PROMPT
            PERFORM MOSTRAR-PROMPT
            PERFORM LEER-ENTRADA
-           EVALUATE WS-ENTRADA
+           MOVE WS-ENTRADA TO WS-OPCION
+           EVALUATE WS-OPCION
                WHEN "1" PERFORM ALTA-PRESUPUESTO
                WHEN "2" PERFORM CONSULTA-PRESUPUESTO
                WHEN "3"
@@ -88,10 +100,15 @@
                WHEN "6" PERFORM REGISTRO-PAGO
                WHEN "7" PERFORM MODIFICACION-PRESUPUESTO
                WHEN "8" PERFORM BAJA-PRESUPUESTO
+               WHEN "9" PERFORM ESTADO-DE-CUENTA
+               WHEN "10" PERFORM COMPROBANTE-PRESUPUESTO
                WHEN "0" SET SALIR-MENU TO TRUE
                WHEN OTHER
                    DISPLAY "  Opción inválida." END-DISPLAY
-           END-EVALUATE.
+           END-EVALUATE
+           IF WS-OPCION NOT = "0"
+               PERFORM MARCAR-PAUSA
+           END-IF.
 
       *-----------------------------------------------------------------
       * Alta: el presupuesto se asocia a un equipo existente.
@@ -120,6 +137,7 @@
                END-IF
            END-IF
            IF REGISTRO-ENCONTRADO
+               PERFORM AVISAR-CANCELACION
                MOVE SPACES TO BUDGETS-REGISTERS
                MOVE EQUIPMENTS-ID TO BUDGETS-EQUIPO-ID
                MOVE EQUIPMENTS-DNI TO BUDGETS-DNI
@@ -135,10 +153,15 @@
                MOVE WS-FECHA TO BUDGETS-FECHA
                SET PRESUPUESTO-PENDIENTE TO TRUE
                MOVE ZERO TO BUDGETS-FECHA-PAGO
-               PERFORM GRABAR-PRESUPUESTO-NUEVO
+               IF OPERACION-CANCELADA
+                   DISPLAY "  Operación cancelada." END-DISPLAY
+               ELSE
+                   PERFORM GRABAR-PRESUPUESTO-NUEVO
+               END-IF
            END-IF.
 
-      * Próximo número de presupuesto (último + 1). WS-ID queda en 0
+      * Próximo número de presupuesto: último + 1, sin repetir los de
+      * presupuestos borrados (control.dat). WS-ID queda en 0
       * si la numeración está agotada. Usa el área del registro, por
       * eso se ejecuta antes de cargar los datos del presupuesto.
        OBTENER-PROXIMO-ID.
@@ -152,7 +175,9 @@
                                ON SIZE ERROR MOVE ZERO TO WS-ID
                            END-COMPUTE
                    END-READ
-           END-START.
+           END-START
+           MOVE "PRESUPUESTOS" TO WS-CLAVE-CONTROL
+           PERFORM AJUSTAR-ID-CONTROL.
 
        GRABAR-PRESUPUESTO-NUEVO.
            MOVE WS-ID TO BUDGETS-ID
@@ -161,6 +186,7 @@
                    DISPLAY "  Error al grabar (file status "
                            WS-FS-BUDGETS ")." END-DISPLAY
                NOT INVALID KEY
+                   PERFORM REGISTRAR-ID-CONTROL
                    MOVE WS-ID TO WS-ID-ED
                    DISPLAY "  Presupuesto registrado con el número "
                            FUNCTION TRIM(WS-ID-ED) "." END-DISPLAY
@@ -286,24 +312,34 @@
                    MOVE WS-FILTRO-EQUIPO TO WS-ID-ED
                    DISPLAY "-- Presupuestos del equipo #"
                            FUNCTION TRIM(WS-ID-ED) " --" END-DISPLAY
+               WHEN FILTRO-CLIENTE
+                   DISPLAY "-- Estado de cuenta: "
+                           FUNCTION TRIM(CUSTOMERS-NAME)
+                           " (DNI " WS-FILTRO-DNI ") --" END-DISPLAY
            END-EVALUATE
            DISPLAY "N.    EQUIPO DNI      FECHA             IMPORTE "
                    "ESTADO    TRABAJO" END-DISPLAY
            DISPLAY WS-SEPARADOR END-DISPLAY
            MOVE ZERO TO WS-CANTIDAD WS-LINEAS-MOSTRADAS
-                        WS-TOTAL-LISTADO
+                        WS-TOTAL-LISTADO WS-TOTAL-PENDIENTE
            SET HAY-MAS-REGISTROS TO TRUE
-           IF FILTRO-EQUIPO
+           EVALUATE TRUE
+           WHEN FILTRO-EQUIPO
                MOVE WS-FILTRO-EQUIPO TO BUDGETS-EQUIPO-ID
                START BUDGETS-FILE KEY IS EQUAL TO BUDGETS-EQUIPO-ID
                    INVALID KEY SET FIN-LECTURA TO TRUE
                END-START
-           ELSE
+           WHEN FILTRO-CLIENTE
+               MOVE WS-FILTRO-DNI TO BUDGETS-DNI
+               START BUDGETS-FILE KEY IS EQUAL TO BUDGETS-DNI
+                   INVALID KEY SET FIN-LECTURA TO TRUE
+               END-START
+           WHEN OTHER
                MOVE ZERO TO BUDGETS-ID
                START BUDGETS-FILE KEY IS NOT LESS THAN BUDGETS-ID
                    INVALID KEY SET FIN-LECTURA TO TRUE
                END-START
-           END-IF
+           END-EVALUATE
            PERFORM UNTIL FIN-LECTURA
                READ BUDGETS-FILE NEXT RECORD
                    AT END SET FIN-LECTURA TO TRUE
@@ -315,6 +351,9 @@
                    EVALUATE TRUE
                        WHEN FILTRO-EQUIPO
                             AND BUDGETS-EQUIPO-ID NOT = WS-FILTRO-EQUIPO
+                           SET FIN-LECTURA TO TRUE
+                       WHEN FILTRO-CLIENTE
+                            AND BUDGETS-DNI NOT = WS-FILTRO-DNI
                            SET FIN-LECTURA TO TRUE
                        WHEN FILTRO-PENDIENTES AND PRESUPUESTO-PAGADO
                            CONTINUE
@@ -331,11 +370,19 @@
            MOVE WS-TOTAL-LISTADO TO WS-TOTAL-LISTADO-ED
            DISPLAY "Total: " FUNCTION TRIM(WS-CANTIDAD-ED)
                    " presupuesto(s) por $ "
-                   FUNCTION TRIM(WS-TOTAL-LISTADO-ED) END-DISPLAY.
+                   FUNCTION TRIM(WS-TOTAL-LISTADO-ED) END-DISPLAY
+           IF FILTRO-CLIENTE
+               MOVE WS-TOTAL-PENDIENTE TO WS-TOTAL-LISTADO-ED
+               DISPLAY "Saldo adeudado: $ "
+                       FUNCTION TRIM(WS-TOTAL-LISTADO-ED) END-DISPLAY
+           END-IF.
 
        MOSTRAR-LINEA-PRESUPUESTO.
            ADD 1 TO WS-CANTIDAD
            ADD BUDGETS-IMPORTE TO WS-TOTAL-LISTADO
+           IF PRESUPUESTO-PENDIENTE
+               ADD BUDGETS-IMPORTE TO WS-TOTAL-PENDIENTE
+           END-IF
            MOVE BUDGETS-FECHA TO WS-FECHA
            PERFORM FORMATEAR-FECHA
            MOVE BUDGETS-IMPORTE TO WS-IMPORTE-ED
@@ -344,10 +391,39 @@
            ELSE
                MOVE "PENDIENTE" TO WS-TEXTO-PAGADO
            END-IF
-           DISPLAY BUDGETS-ID " " BUDGETS-EQUIPO-ID "  " BUDGETS-DNI
-                   " " WS-FECHA-TXT " " WS-IMPORTE-ED " "
-                   WS-TEXTO-PAGADO " " BUDGETS-DESCRIPCION(1:25)
-           END-DISPLAY.
+           PERFORM INICIAR-LINEA
+           STRING BUDGETS-ID " " BUDGETS-EQUIPO-ID "  " BUDGETS-DNI
+                  " " WS-FECHA-TXT " " WS-IMPORTE-ED " "
+                  WS-TEXTO-PAGADO " "
+               DELIMITED BY SIZE INTO WS-LINEA WITH POINTER WS-PUNTERO
+           END-STRING
+           MOVE BUDGETS-DESCRIPCION TO WS-CORTE-ORIGEN
+           MOVE 25 TO WS-CORTE-ANCHO
+           PERFORM AGREGAR-COLUMNA
+           PERFORM MOSTRAR-LINEA.
+
+      *-----------------------------------------------------------------
+      * Estado de cuenta: presupuestos y saldo de un cliente
+      * (lectura por la clave alternativa BUDGETS-DNI).
+      *-----------------------------------------------------------------
+       ESTADO-DE-CUENTA.
+           DISPLAY " " END-DISPLAY
+           DISPLAY "-- Estado de cuenta de un cliente --" END-DISPLAY
+           PERFORM LEER-DNI
+           IF OPERACION-CANCELADA
+               DISPLAY "  Operación cancelada." END-DISPLAY
+           ELSE
+               MOVE WS-DNI TO CUSTOMERS-DNI
+               READ CUSTOMERS-FILE RECORD KEY IS CUSTOMERS-DNI
+                   INVALID KEY
+                       DISPLAY "  No existe un cliente con DNI "
+                               WS-DNI "." END-DISPLAY
+                   NOT INVALID KEY
+                       SET FILTRO-CLIENTE TO TRUE
+                       MOVE WS-DNI TO WS-FILTRO-DNI
+                       PERFORM LISTADO-PRESUPUESTOS
+               END-READ
+           END-IF.
 
       *-----------------------------------------------------------------
       * Registro de pago
@@ -363,15 +439,17 @@
                    END-DISPLAY
                ELSE
                    PERFORM ELEGIR-FORMA-PAGO
-                   IF OPERACION-CANCELADA
-                       DISPLAY "  Operación cancelada." END-DISPLAY
-                   ELSE
+                   IF OPERACION-EN-CURSO
                        MOVE "Fecha de pago DD/MM/AAAA (ENTER = hoy):"
                            TO WS-PROMPT
                        MOVE BUDGETS-FECHA TO WS-FECHA-MINIMA
                        PERFORM LEER-FECHA
                        MOVE WS-FECHA TO BUDGETS-FECHA-PAGO
                        SET PRESUPUESTO-PAGADO TO TRUE
+                   END-IF
+                   IF OPERACION-CANCELADA
+                       DISPLAY "  Operación cancelada." END-DISPLAY
+                   ELSE
                        REWRITE BUDGETS-REGISTERS
                            INVALID KEY
                                DISPLAY "  Error al actualizar (file "
@@ -429,28 +507,36 @@
                ELSE
                    DISPLAY "Ingrese los nuevos datos (ENTER mantiene "
                            "el valor actual)." END-DISPLAY
+                   PERFORM AVISAR-CANCELACION
                    MOVE "Trabajo a realizar:" TO WS-PROMPT
                    MOVE 100 TO WS-LARGO-MAXIMO
                    PERFORM LEER-TEXTO
                    IF WS-ENTRADA NOT = SPACES AND WS-ENTRADA NOT = "-"
                        MOVE WS-ENTRADA TO BUDGETS-DESCRIPCION
                    END-IF
-                   MOVE "¿Modificar el importe? (S/N):" TO WS-PROMPT
-                   PERFORM CONFIRMAR
-                   IF CONFIRMA-SI
-                       MOVE "Nuevo importe $:" TO WS-PROMPT
-                       PERFORM LEER-IMPORTE
-                       MOVE WS-IMPORTE TO BUDGETS-IMPORTE
+                   IF OPERACION-EN-CURSO
+                       MOVE "¿Modificar el importe? (S/N):"
+                           TO WS-PROMPT
+                       PERFORM CONFIRMAR
+                       IF CONFIRMA-SI
+                           MOVE "Nuevo importe $:" TO WS-PROMPT
+                           PERFORM LEER-IMPORTE
+                           MOVE WS-IMPORTE TO BUDGETS-IMPORTE
+                       END-IF
                    END-IF
-                   REWRITE BUDGETS-REGISTERS
-                       INVALID KEY
-                           DISPLAY "  Error al actualizar (file "
-                                   "status " WS-FS-BUDGETS ")."
-                           END-DISPLAY
-                       NOT INVALID KEY
-                           DISPLAY "  Presupuesto actualizado "
-                                   "correctamente." END-DISPLAY
-                   END-REWRITE
+                   IF OPERACION-CANCELADA
+                       DISPLAY "  Operación cancelada." END-DISPLAY
+                   ELSE
+                       REWRITE BUDGETS-REGISTERS
+                           INVALID KEY
+                               DISPLAY "  Error al actualizar (file "
+                                       "status " WS-FS-BUDGETS ")."
+                               END-DISPLAY
+                           NOT INVALID KEY
+                               DISPLAY "  Presupuesto actualizado "
+                                       "correctamente." END-DISPLAY
+                       END-REWRITE
+                   END-IF
                END-IF
            END-IF.
 
@@ -486,10 +572,125 @@
                END-IF
            END-IF.
 
+      *-----------------------------------------------------------------
+      * Comprobante: presupuesto (pendiente) o recibo de pago (pagado)
+      * en comprobantes/presupuesto-NNNNN.txt o recibo-NNNNN.txt
+      *-----------------------------------------------------------------
+       COMPROBANTE-PRESUPUESTO.
+           DISPLAY " " END-DISPLAY
+           DISPLAY "-- Generar comprobante --" END-DISPLAY
+           PERFORM PEDIR-PRESUPUESTO-EXISTENTE
+           IF REGISTRO-ENCONTRADO
+               MOVE BUDGETS-DNI TO CUSTOMERS-DNI
+               READ CUSTOMERS-FILE RECORD KEY IS CUSTOMERS-DNI
+                   INVALID KEY
+                       MOVE "(cliente inexistente)" TO CUSTOMERS-NAME
+               END-READ
+               MOVE BUDGETS-EQUIPO-ID TO EQUIPMENTS-ID
+               READ EQUIPMENTS-FILE RECORD KEY IS EQUIPMENTS-ID
+                   INVALID KEY
+                       MOVE "(equipo inexistente)"
+                           TO EQUIPMENTS-DESCRIPCION
+                       MOVE SPACES TO EQUIPMENTS-TIPO
+               END-READ
+               MOVE "comprobantes" TO WS-SUBDIRECTORIO
+               MOVE SPACES TO WS-NOMBRE-TEXTO
+               IF PRESUPUESTO-PAGADO
+                   STRING "recibo-" BUDGETS-ID ".txt"
+                       DELIMITED BY SIZE INTO WS-NOMBRE-TEXTO
+                   END-STRING
+               ELSE
+                   STRING "presupuesto-" BUDGETS-ID ".txt"
+                       DELIMITED BY SIZE INTO WS-NOMBRE-TEXTO
+                   END-STRING
+               END-IF
+               PERFORM ABRIR-ARCHIVO-TEXTO
+               IF FS-TEXTO-OK
+                   PERFORM ESCRIBIR-COMPROBANTE-PRESUPUESTO
+                   PERFORM CERRAR-ARCHIVO-TEXTO
+               END-IF
+           END-IF.
+
+       ESCRIBIR-COMPROBANTE-PRESUPUESTO.
+           MOVE BUDGETS-ID TO WS-ID-ED
+           MOVE SPACES TO WS-TITULO
+           IF PRESUPUESTO-PAGADO
+               STRING "RECIBO DE PAGO - PRESUPUESTO N. "
+                      FUNCTION TRIM(WS-ID-ED)
+                   DELIMITED BY SIZE INTO WS-TITULO
+               END-STRING
+           ELSE
+               STRING "PRESUPUESTO N. " FUNCTION TRIM(WS-ID-ED)
+                   DELIMITED BY SIZE INTO WS-TITULO
+               END-STRING
+           END-IF
+           PERFORM ESCRIBIR-ENCABEZADO-COMPROBANTE
+
+           MOVE "Cliente:" TO WS-DATO-ETIQUETA
+           MOVE SPACES TO WS-DATO-VALOR
+           STRING FUNCTION TRIM(CUSTOMERS-NAME) " (DNI " BUDGETS-DNI ")"
+               DELIMITED BY SIZE INTO WS-DATO-VALOR
+           END-STRING
+           PERFORM ESCRIBIR-DATO
+           MOVE "Equipo:" TO WS-DATO-ETIQUETA
+           MOVE BUDGETS-EQUIPO-ID TO WS-ID-ED
+           MOVE SPACES TO WS-DATO-VALOR
+           STRING "#" FUNCTION TRIM(WS-ID-ED) " "
+                  FUNCTION TRIM(EQUIPMENTS-TIPO) " - "
+                  FUNCTION TRIM(EQUIPMENTS-DESCRIPCION)
+               DELIMITED BY SIZE INTO WS-DATO-VALOR
+           END-STRING
+           PERFORM ESCRIBIR-DATO
+           MOVE BUDGETS-FECHA TO WS-FECHA
+           PERFORM FORMATEAR-FECHA
+           MOVE "Fecha:" TO WS-DATO-ETIQUETA
+           MOVE WS-FECHA-TXT TO WS-DATO-VALOR
+           PERFORM ESCRIBIR-DATO
+           PERFORM ESCRIBIR-RENGLON
+
+           MOVE "Trabajo:" TO WS-DATO-ETIQUETA
+           MOVE BUDGETS-DESCRIPCION TO WS-DATO-VALOR
+           PERFORM ESCRIBIR-DATO
+           MOVE BUDGETS-IMPORTE TO WS-IMPORTE-ED
+           MOVE "Importe:" TO WS-DATO-ETIQUETA
+           MOVE SPACES TO WS-DATO-VALOR
+           STRING "$ " FUNCTION TRIM(WS-IMPORTE-ED)
+               DELIMITED BY SIZE INTO WS-DATO-VALOR
+           END-STRING
+           PERFORM ESCRIBIR-DATO
+           PERFORM ESCRIBIR-RENGLON
+
+           IF PRESUPUESTO-PAGADO
+               MOVE BUDGETS-FECHA-PAGO TO WS-FECHA
+               PERFORM FORMATEAR-FECHA
+               MOVE "Pagado el:" TO WS-DATO-ETIQUETA
+               MOVE WS-FECHA-TXT TO WS-DATO-VALOR
+               PERFORM ESCRIBIR-DATO
+               MOVE "Forma de pago:" TO WS-DATO-ETIQUETA
+               MOVE BUDGETS-FORMA-PAGO TO WS-DATO-VALOR
+               PERFORM ESCRIBIR-DATO
+               PERFORM ESCRIBIR-RENGLON
+               MOVE "  Recibimos el importe indicado. ¡Gracias!"
+                   TO WS-DATO-VALOR
+               PERFORM ESCRIBIR-TEXTO
+           ELSE
+               MOVE "Estado:" TO WS-DATO-ETIQUETA
+               MOVE "PENDIENTE DE PAGO" TO WS-DATO-VALOR
+               PERFORM ESCRIBIR-DATO
+               PERFORM ESCRIBIR-RENGLON
+               MOVE "  Presupuesto válido por 15 días desde su fecha."
+                   TO WS-DATO-VALOR
+               PERFORM ESCRIBIR-TEXTO
+           END-IF
+           PERFORM ESCRIBIR-PIE-COMPROBANTE.
+
        CERRAR-ARCHIVOS.
-           CLOSE BUDGETS-FILE CUSTOMERS-FILE EQUIPMENTS-FILE.
+           CLOSE BUDGETS-FILE CUSTOMERS-FILE EQUIPMENTS-FILE
+                 CONTROL-FILE.
 
            COPY "proc-rutas.cpy".
            COPY "proc-comun.cpy".
+           COPY "proc-control.cpy".
+           COPY "proc-texto.cpy".
 
        END PROGRAM PRESUPUESTOS.

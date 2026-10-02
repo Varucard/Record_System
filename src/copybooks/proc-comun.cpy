@@ -18,6 +18,7 @@
                    DISPLAY "Fin de la entrada. Cerrando el sistema."
                    END-DISPLAY
                    PERFORM CERRAR-ARCHIVOS
+                   PERFORM RESTAURAR-TERMINAL
                    MOVE 2 TO RETURN-CODE
                    STOP RUN
            END-ACCEPT
@@ -82,25 +83,52 @@
 
       * Pide un texto opcional de hasta WS-LARGO-MAXIMO bytes.
        LEER-TEXTO.
-           MOVE "N" TO WS-CONFIRMA
-           PERFORM UNTIL CONFIRMA-SI
-               PERFORM MOSTRAR-PROMPT
-               PERFORM LEER-ENTRADA
-               PERFORM VALIDAR-LARGO
-           END-PERFORM.
+           IF OPERACION-EN-CURSO
+               MOVE "N" TO WS-CONFIRMA
+               PERFORM UNTIL CONFIRMA-SI
+                   PERFORM MOSTRAR-PROMPT
+                   PERFORM LEER-ENTRADA
+                   PERFORM VERIFICAR-CANCELACION
+                   IF OPERACION-CANCELADA
+                       MOVE "S" TO WS-CONFIRMA
+                   ELSE
+                       PERFORM VALIDAR-LARGO
+                   END-IF
+               END-PERFORM
+           END-IF.
 
       * Pide un texto que no puede quedar vacío, usando WS-PROMPT.
        LEER-TEXTO-OBLIGATORIO.
-           MOVE "N" TO WS-CONFIRMA
-           PERFORM UNTIL CONFIRMA-SI
-               PERFORM MOSTRAR-PROMPT
-               PERFORM LEER-ENTRADA
-               IF WS-ENTRADA = SPACES
-                   DISPLAY "  Este dato es obligatorio." END-DISPLAY
-               ELSE
-                   PERFORM VALIDAR-LARGO
-               END-IF
-           END-PERFORM.
+           IF OPERACION-EN-CURSO
+               MOVE "N" TO WS-CONFIRMA
+               PERFORM UNTIL CONFIRMA-SI
+                   PERFORM MOSTRAR-PROMPT
+                   PERFORM LEER-ENTRADA
+                   PERFORM VERIFICAR-CANCELACION
+                   EVALUATE TRUE
+                       WHEN OPERACION-CANCELADA
+                           MOVE "S" TO WS-CONFIRMA
+                       WHEN WS-ENTRADA = SPACES
+                           DISPLAY "  Este dato es obligatorio."
+                           END-DISPLAY
+                       WHEN OTHER
+                           PERFORM VALIDAR-LARGO
+                   END-EVALUATE
+               END-PERFORM
+           END-IF.
+
+      * Un "*" en cualquier dato cancela el alta o modificación en
+      * curso: las lecturas siguientes no preguntan nada y quien llama
+      * no debe grabar si quedó OPERACION-CANCELADA.
+       VERIFICAR-CANCELACION.
+           IF WS-ENTRADA = "*"
+               SET OPERACION-CANCELADA TO TRUE
+               MOVE SPACES TO WS-ENTRADA
+           END-IF.
+
+       AVISAR-CANCELACION.
+           DISPLAY "  (Escriba * en cualquier dato para cancelar.)"
+           END-DISPLAY.
 
       * En una modificación, deja en WS-ENTRADA el valor final de un
       * campo opcional: ENTER mantiene WS-VALOR-ACTUAL y "-" lo borra.
@@ -130,16 +158,23 @@
 
       * Pide un email opcional (máximo 50 caracteres).
        LEER-EMAIL.
-           MOVE 50 TO WS-LARGO-MAXIMO
-           MOVE "N" TO WS-CONFIRMA
-           PERFORM UNTIL CONFIRMA-SI
-               PERFORM MOSTRAR-PROMPT
-               PERFORM LEER-ENTRADA
-               PERFORM VALIDAR-LARGO
-               IF CONFIRMA-SI
-                   PERFORM VALIDAR-EMAIL
-               END-IF
-           END-PERFORM.
+           IF OPERACION-EN-CURSO
+               MOVE 50 TO WS-LARGO-MAXIMO
+               MOVE "N" TO WS-CONFIRMA
+               PERFORM UNTIL CONFIRMA-SI
+                   PERFORM MOSTRAR-PROMPT
+                   PERFORM LEER-ENTRADA
+                   PERFORM VERIFICAR-CANCELACION
+                   IF OPERACION-CANCELADA
+                       MOVE "S" TO WS-CONFIRMA
+                   ELSE
+                       PERFORM VALIDAR-LARGO
+                       IF CONFIRMA-SI
+                           PERFORM VALIDAR-EMAIL
+                       END-IF
+                   END-IF
+               END-PERFORM
+           END-IF.
 
       * Formato usuario@dominio.ext: sin espacios, una sola "@",
       * texto antes de la "@" y un "." dentro del dominio.
@@ -177,9 +212,10 @@
       * También acepta 15000.50 (un punto seguido de 1 o 2 dígitos).
        LEER-IMPORTE.
            MOVE ZERO TO WS-IMPORTE
-           PERFORM UNTIL WS-IMPORTE > ZERO
+           PERFORM UNTIL WS-IMPORTE > ZERO OR OPERACION-CANCELADA
                PERFORM MOSTRAR-PROMPT
                PERFORM LEER-ENTRADA
+               PERFORM VERIFICAR-CANCELACION
                PERFORM NORMALIZAR-IMPORTE
                MOVE ZERO TO WS-IMPORTE-LEIDO
                IF WS-IMPORTE-TXT NOT = SPACES
@@ -189,13 +225,16 @@
                        ON SIZE ERROR MOVE ZERO TO WS-IMPORTE-LEIDO
                    END-COMPUTE
                END-IF
-               IF WS-IMPORTE-LEIDO > ZERO
-                   MOVE WS-IMPORTE-LEIDO TO WS-IMPORTE
-               ELSE
-                   DISPLAY "  Importe inválido: ingrese un número "
-                           "mayor a cero (ej.: 15.000,50)."
-                   END-DISPLAY
-               END-IF
+               EVALUATE TRUE
+                   WHEN OPERACION-CANCELADA
+                       CONTINUE
+                   WHEN WS-IMPORTE-LEIDO > ZERO
+                       MOVE WS-IMPORTE-LEIDO TO WS-IMPORTE
+                   WHEN OTHER
+                       DISPLAY "  Importe inválido: ingrese un "
+                               "número mayor a cero (ej.: 15.000,50)."
+                       END-DISPLAY
+               END-EVALUATE
            END-PERFORM.
 
       * Deja en WS-IMPORTE-TXT el importe sin separadores de miles y
@@ -237,43 +276,49 @@
        LEER-FECHA.
            PERFORM OBTENER-FECHA-HOY
            MOVE ZERO TO WS-FECHA
-           PERFORM UNTIL WS-FECHA > ZERO
+           PERFORM UNTIL WS-FECHA > ZERO OR OPERACION-CANCELADA
                PERFORM MOSTRAR-PROMPT
                PERFORM LEER-ENTRADA
-               IF WS-ENTRADA = SPACES
-                   MOVE WS-FECHA-HOY TO WS-FECHA
-               ELSE
-                   IF WS-ENTRADA(3:1) = "/" AND WS-ENTRADA(6:1) = "/"
-                      AND WS-ENTRADA(1:2) IS NUMERIC
-                      AND WS-ENTRADA(4:2) IS NUMERIC
-                      AND WS-ENTRADA(7:4) IS NUMERIC
-                      AND WS-ENTRADA(11:) = SPACES
-                       MOVE WS-ENTRADA(7:4) TO WS-FECHA-AAAA
-                       MOVE WS-ENTRADA(4:2) TO WS-FECHA-MM
-                       MOVE WS-ENTRADA(1:2) TO WS-FECHA-DD
-                       IF FUNCTION TEST-DATE-YYYYMMDD(WS-FECHA)
-                          NOT = ZERO
-                          OR WS-FECHA-AAAA < 2000
-                          OR WS-FECHA-AAAA > 2099
-                           MOVE ZERO TO WS-FECHA
-                       END-IF
-                   END-IF
-                   IF WS-FECHA = ZERO
-                       DISPLAY "  Fecha inválida: use DD/MM/AAAA "
-                               "(años 2000 a 2099)." END-DISPLAY
-                   END-IF
-               END-IF
+               PERFORM VERIFICAR-CANCELACION
+               EVALUATE TRUE
+                   WHEN OPERACION-CANCELADA
+                       CONTINUE
+                   WHEN WS-ENTRADA = SPACES
+                       MOVE WS-FECHA-HOY TO WS-FECHA
+                   WHEN OTHER
+                       PERFORM CONVERTIR-FECHA
+               END-EVALUATE
                IF WS-FECHA > ZERO AND WS-FECHA < WS-FECHA-MINIMA
-                   MOVE WS-FECHA TO WS-FECHA-HOY
                    MOVE WS-FECHA-MINIMA TO WS-FECHA
                    PERFORM FORMATEAR-FECHA
                    DISPLAY "  La fecha no puede ser anterior al "
                            WS-FECHA-TXT "." END-DISPLAY
                    MOVE ZERO TO WS-FECHA
-                   PERFORM OBTENER-FECHA-HOY
                END-IF
            END-PERFORM
            MOVE ZERO TO WS-FECHA-MINIMA.
+
+      * Convierte WS-ENTRADA (DD/MM/AAAA) a WS-FECHA (AAAAMMDD).
+      * Deja WS-FECHA en cero si la fecha es inválida.
+       CONVERTIR-FECHA.
+           MOVE ZERO TO WS-FECHA
+           IF WS-ENTRADA(3:1) = "/" AND WS-ENTRADA(6:1) = "/"
+              AND WS-ENTRADA(1:2) IS NUMERIC
+              AND WS-ENTRADA(4:2) IS NUMERIC
+              AND WS-ENTRADA(7:4) IS NUMERIC
+              AND WS-ENTRADA(11:) = SPACES
+               MOVE WS-ENTRADA(7:4) TO WS-FECHA-AAAA
+               MOVE WS-ENTRADA(4:2) TO WS-FECHA-MM
+               MOVE WS-ENTRADA(1:2) TO WS-FECHA-DD
+               IF FUNCTION TEST-DATE-YYYYMMDD(WS-FECHA) NOT = ZERO
+                  OR WS-FECHA-AAAA < 2000 OR WS-FECHA-AAAA > 2099
+                   MOVE ZERO TO WS-FECHA
+               END-IF
+           END-IF
+           IF WS-FECHA = ZERO
+               DISPLAY "  Fecha inválida: use DD/MM/AAAA "
+                       "(años 2000 a 2099)." END-DISPLAY
+           END-IF.
 
       * Pregunta S/N usando WS-PROMPT. Deja el resultado en WS-CONFIRMA.
        CONFIRMAR.
@@ -334,3 +379,133 @@
                END-IF
            END-IF
            ADD 1 TO WS-LINEAS-MOSTRADAS.
+
+      *-----------------------------------------------------------------
+      * Textos alineados por columnas (UTF-8)
+      *-----------------------------------------------------------------
+
+      * Deja en WS-CORTE-RESULTADO(1:WS-CORTE-LARGO) el texto de
+      * WS-CORTE-ORIGEN ajustado a WS-CORTE-ANCHO columnas: lo recorta
+      * sin partir caracteres multibyte (á, ñ...) y lo completa con
+      * espacios. Los bytes X"80"-X"BF" continúan un carácter.
+       AJUSTAR-ANCHO.
+           MOVE SPACES TO WS-CORTE-RESULTADO
+           MOVE ZERO TO WS-CORTE-COLUMNAS WS-CORTE-LARGO
+           PERFORM VARYING WS-I FROM 1 BY 1 UNTIL WS-I > 200
+               IF WS-CORTE-ORIGEN(WS-I:1) < X"80"
+                  OR WS-CORTE-ORIGEN(WS-I:1) > X"BF"
+                   IF WS-CORTE-COLUMNAS >= WS-CORTE-ANCHO
+                       EXIT PERFORM
+                   END-IF
+                   ADD 1 TO WS-CORTE-COLUMNAS
+               END-IF
+               ADD 1 TO WS-CORTE-LARGO
+               MOVE WS-CORTE-ORIGEN(WS-I:1)
+                   TO WS-CORTE-RESULTADO(WS-CORTE-LARGO:1)
+           END-PERFORM
+           COMPUTE WS-CORTE-LARGO =
+               WS-CORTE-LARGO + WS-CORTE-ANCHO - WS-CORTE-COLUMNAS.
+
+       INICIAR-LINEA.
+           MOVE SPACES TO WS-LINEA
+           MOVE 1 TO WS-PUNTERO.
+
+      * Agrega WS-CORTE-ORIGEN a WS-LINEA con WS-CORTE-ANCHO columnas
+      * y un espacio de separación.
+       AGREGAR-COLUMNA.
+           PERFORM AJUSTAR-ANCHO
+           STRING WS-CORTE-RESULTADO(1:WS-CORTE-LARGO) " "
+               DELIMITED BY SIZE INTO WS-LINEA WITH POINTER WS-PUNTERO
+           END-STRING.
+
+       MOSTRAR-LINEA.
+           DISPLAY FUNCTION TRIM(WS-LINEA TRAILING) END-DISPLAY.
+
+      *-----------------------------------------------------------------
+      * Interfaz clásica / modo pantalla
+      *-----------------------------------------------------------------
+
+      * Lee RS_INTERFAZ ("pantalla" activa la pantalla completa) y
+      * RS_TEMA ("verde" para fósforo verde, si no colores).
+       INICIAR-INTERFAZ.
+           SET MODO-CLASICO TO TRUE
+           SET TEMA-COLOR TO TRUE
+           SET SIN-PAUSA TO TRUE
+           MOVE SPACES TO WS-INTERFAZ
+           ACCEPT WS-INTERFAZ FROM ENVIRONMENT "RS_INTERFAZ"
+           END-ACCEPT
+           IF FUNCTION LOWER-CASE(WS-INTERFAZ) = "pantalla"
+               SET MODO-PANTALLA TO TRUE
+           END-IF
+           MOVE SPACES TO WS-INTERFAZ
+           ACCEPT WS-INTERFAZ FROM ENVIRONMENT "RS_TEMA"
+           END-ACCEPT
+           IF FUNCTION LOWER-CASE(WS-INTERFAZ) = "verde"
+               SET TEMA-VERDE TO TRUE
+               MOVE "[0;32m" TO WS-COLOR-BASE
+               MOVE "[1;30;42m" TO WS-COLOR-TITULO
+           ELSE
+               MOVE "[0m" TO WS-COLOR-BASE
+               MOVE "[1;37;44m" TO WS-COLOR-TITULO
+           END-IF.
+
+      * Al comienzo de cada pantalla. En modo pantalla espera ENTER si
+      * hay un resultado a la vista, limpia la pantalla y muestra la
+      * barra superior. En modo clásico deja un renglón en blanco.
+       PREPARAR-PANTALLA.
+           IF MODO-CLASICO
+               DISPLAY " " END-DISPLAY
+           ELSE
+               IF PAUSA-PENDIENTE
+                   DISPLAY " " END-DISPLAY
+                   DISPLAY "Presione ENTER para continuar..."
+                       WITH NO ADVANCING END-DISPLAY
+                   PERFORM LEER-ENTRADA
+               END-IF
+               DISPLAY WS-ESC FUNCTION TRIM(WS-COLOR-BASE)
+                       WS-ESC "[2J" WS-ESC "[H" WITH NO ADVANCING
+               END-DISPLAY
+               PERFORM OBTENER-FECHA-HOY
+               MOVE WS-FECHA-HOY TO WS-FECHA
+               PERFORM FORMATEAR-FECHA
+               ACCEPT WS-HORA FROM TIME END-ACCEPT
+               DISPLAY WS-ESC FUNCTION TRIM(WS-COLOR-TITULO)
+                       " RECORD SYSTEM - Servicio técnico"
+                       "                    " WS-FECHA-TXT " "
+                       WS-HORA-HH ":" WS-HORA-MM " "
+                       WS-ESC FUNCTION TRIM(WS-COLOR-BASE)
+               END-DISPLAY
+               DISPLAY " " END-DISPLAY
+           END-IF
+           SET SIN-PAUSA TO TRUE.
+
+      * Título de la pantalla actual (WS-TITULO).
+       MOSTRAR-TITULO.
+           IF MODO-CLASICO
+               DISPLAY WS-SEPARADOR-DOBLE END-DISPLAY
+               DISPLAY "  " FUNCTION TRIM(WS-TITULO) END-DISPLAY
+               DISPLAY WS-SEPARADOR-DOBLE END-DISPLAY
+           ELSE
+               MOVE WS-TITULO TO WS-CORTE-ORIGEN
+               MOVE 66 TO WS-CORTE-ANCHO
+               PERFORM AJUSTAR-ANCHO
+               DISPLAY "+" WS-SEPARADOR(1:68) "+" END-DISPLAY
+               DISPLAY "| " WS-ESC FUNCTION TRIM(WS-COLOR-TITULO)
+                       WS-CORTE-RESULTADO(1:WS-CORTE-LARGO)
+                       WS-ESC FUNCTION TRIM(WS-COLOR-BASE) " |"
+               END-DISPLAY
+               DISPLAY "+" WS-SEPARADOR(1:68) "+" END-DISPLAY
+           END-IF.
+
+      * Después de ejecutar una opción: en modo pantalla, la próxima
+      * pantalla espera ENTER para que se pueda leer el resultado.
+       MARCAR-PAUSA.
+           IF MODO-PANTALLA
+               SET PAUSA-PENDIENTE TO TRUE
+           END-IF.
+
+      * Devuelve la terminal a sus colores normales.
+       RESTAURAR-TERMINAL.
+           IF MODO-PANTALLA
+               DISPLAY WS-ESC "[0m" END-DISPLAY
+           END-IF.

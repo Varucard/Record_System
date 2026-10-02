@@ -6,6 +6,7 @@
            MOVE SPACES TO WS-RUTA-CUSTOMERS
                           WS-RUTA-EQUIPMENTS
                           WS-RUTA-BUDGETS
+                          WS-RUTA-CONTROL
            STRING FUNCTION TRIM(LK-DIRECTORIO-DATOS) "/customers.dat"
                DELIMITED BY SIZE INTO WS-RUTA-CUSTOMERS
            END-STRING
@@ -14,4 +15,7 @@
            END-STRING
            STRING FUNCTION TRIM(LK-DIRECTORIO-DATOS) "/budgets.dat"
                DELIMITED BY SIZE INTO WS-RUTA-BUDGETS
+           END-STRING
+           STRING FUNCTION TRIM(LK-DIRECTORIO-DATOS) "/control.dat"
+               DELIMITED BY SIZE INTO WS-RUTA-CONTROL
            END-STRING.

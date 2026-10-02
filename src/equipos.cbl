@@ -1,7 +1,7 @@
       ******************************************************************
       * Purpose: Gestión de equipos ingresados al servicio técnico
       *          (ingreso, consulta, listados, modificación, cambio
-      *          de estado y baja).
+      *          de estado, baja y comprobante de ingreso).
       * Parámetros:
       *   LK-DIRECTORIO-DATOS (entrada)  directorio de los .dat
       ******************************************************************
@@ -17,12 +17,16 @@
            COPY "fc-customers.cpy".
            COPY "fc-equipments.cpy".
            COPY "fc-budgets.cpy".
+           COPY "fc-control.cpy".
+           COPY "fc-texto.cpy".
 
        DATA DIVISION.
        FILE SECTION.
            COPY "fd-customers.cpy".
            COPY "fd-equipments.cpy".
            COPY "fd-budgets.cpy".
+           COPY "fd-control.cpy".
+           COPY "fd-texto.cpy".
 
        WORKING-STORAGE SECTION.
            COPY "ws-archivos.cpy".
@@ -36,13 +40,15 @@
        PROCEDURE DIVISION USING LK-DIRECTORIO-DATOS.
        INICIO-EQUIPOS.
            PERFORM ARMAR-RUTAS
-           OPEN I-O EQUIPMENTS-FILE
+           PERFORM INICIAR-INTERFAZ
+           OPEN I-O EQUIPMENTS-FILE CONTROL-FILE
            OPEN INPUT CUSTOMERS-FILE BUDGETS-FILE
            IF NOT FS-EQUIPMENTS-OK OR NOT FS-CUSTOMERS-OK
-              OR NOT FS-BUDGETS-OK
+              OR NOT FS-BUDGETS-OK OR NOT FS-CONTROL-OK
                DISPLAY "Error al abrir los archivos (file status "
                        WS-FS-EQUIPMENTS "/" WS-FS-CUSTOMERS "/"
-                       WS-FS-BUDGETS ")." END-DISPLAY
+                       WS-FS-BUDGETS "/" WS-FS-CONTROL ")."
+               END-DISPLAY
                PERFORM CERRAR-ARCHIVOS
                GOBACK
            END-IF
@@ -52,10 +58,9 @@
            GOBACK.
 
        MENU-EQUIPOS.
-           DISPLAY " " END-DISPLAY
-           DISPLAY WS-SEPARADOR-DOBLE END-DISPLAY
-           DISPLAY "  EQUIPOS" END-DISPLAY
-           DISPLAY WS-SEPARADOR-DOBLE END-DISPLAY
+           PERFORM PREPARAR-PANTALLA
+           MOVE "EQUIPOS" TO WS-TITULO
+           PERFORM MOSTRAR-TITULO
            DISPLAY "  1. Registrar ingreso de equipo" END-DISPLAY
            DISPLAY "  2. Consultar equipo" END-DISPLAY
            DISPLAY "  3. Listar todos los equipos" END-DISPLAY
@@ -63,11 +68,13 @@
            DISPLAY "  5. Modificar datos del equipo" END-DISPLAY
            DISPLAY "  6. Cambiar estado del equipo" END-DISPLAY
            DISPLAY "  7. Eliminar equipo" END-DISPLAY
+           DISPLAY "  8. Generar comprobante de ingreso" END-DISPLAY
            DISPLAY "  0. Volver al menú principal" END-DISPLAY
            MOVE "Opción:" TO WS-PROMPT
            PERFORM MOSTRAR-PROMPT
            PERFORM LEER-ENTRADA
-           EVALUATE WS-ENTRADA
+           MOVE WS-ENTRADA TO WS-OPCION
+           EVALUATE WS-OPCION
                WHEN "1" PERFORM ALTA-EQUIPO
                WHEN "2" PERFORM CONSULTA-EQUIPO
                WHEN "3" PERFORM LISTADO-EQUIPOS
@@ -75,10 +82,14 @@
                WHEN "5" PERFORM MODIFICACION-EQUIPO
                WHEN "6" PERFORM CAMBIO-ESTADO-EQUIPO
                WHEN "7" PERFORM BAJA-EQUIPO
+               WHEN "8" PERFORM COMPROBANTE-INGRESO
                WHEN "0" SET SALIR-MENU TO TRUE
                WHEN OTHER
                    DISPLAY "  Opción inválida." END-DISPLAY
-           END-EVALUATE.
+           END-EVALUATE
+           IF WS-OPCION NOT = "0"
+               PERFORM MARCAR-PAUSA
+           END-IF.
 
       *-----------------------------------------------------------------
       * Alta: el equipo debe pertenecer a un cliente existente.
@@ -104,8 +115,14 @@
                        DISPLAY "  Numeración de equipos agotada "
                                "(máximo 99999)." END-DISPLAY
                    ELSE
+                       PERFORM AVISAR-CANCELACION
                        PERFORM CARGAR-DATOS-EQUIPO
-                       PERFORM GRABAR-EQUIPO-NUEVO
+                       IF OPERACION-CANCELADA
+                           DISPLAY "  Operación cancelada."
+                           END-DISPLAY
+                       ELSE
+                           PERFORM GRABAR-EQUIPO-NUEVO
+                       END-IF
                    END-IF
                END-IF
            END-IF.
@@ -140,13 +157,15 @@
                    DISPLAY "  Error al grabar (file status "
                            WS-FS-EQUIPMENTS ")." END-DISPLAY
                NOT INVALID KEY
+                   PERFORM REGISTRAR-ID-CONTROL
                    MOVE WS-ID TO WS-ID-ED
                    DISPLAY "  Equipo registrado con el número "
                            FUNCTION TRIM(WS-ID-ED) "." END-DISPLAY
            END-WRITE.
 
-      * Próximo número de equipo (último + 1). Deja WS-ID en cero si
-      * la numeración está agotada. Usa el área del registro, por eso
+      * Próximo número de equipo: el último + 1, sin repetir los de
+      * equipos borrados (control.dat). WS-ID queda en cero si la
+      * numeración está agotada. Usa el área del registro, por eso
       * se ejecuta antes de cargar los datos del equipo nuevo.
        OBTENER-PROXIMO-ID.
            MOVE 1 TO WS-ID
@@ -159,7 +178,9 @@
                                ON SIZE ERROR MOVE ZERO TO WS-ID
                            END-COMPUTE
                    END-READ
-           END-START.
+           END-START
+           MOVE "EQUIPOS" TO WS-CLAVE-CONTROL
+           PERFORM AJUSTAR-ID-CONTROL.
 
        BUSCAR-CLIENTE.
            SET REGISTRO-NO-ENCONTRADO TO TRUE
@@ -263,20 +284,29 @@
                        IF BUDGETS-EQUIPO-ID NOT = EQUIPMENTS-ID
                            SET FIN-LECTURA TO TRUE
                        ELSE
-                           MOVE BUDGETS-IMPORTE TO WS-IMPORTE-ED
-                           DISPLAY "    #" BUDGETS-ID " $"
-                                   WS-IMPORTE-ED " "
-                                   BUDGETS-DESCRIPCION(1:30) " "
-                                   WITH NO ADVANCING END-DISPLAY
-                           IF PRESUPUESTO-PAGADO
-                               DISPLAY "PAGADO" END-DISPLAY
-                           ELSE
-                               DISPLAY "PENDIENTE" END-DISPLAY
-                           END-IF
+                           PERFORM MOSTRAR-RENGLON-PRESUPUESTO
                        END-IF
                    END-IF
                END-PERFORM
            END-IF.
+
+       MOSTRAR-RENGLON-PRESUPUESTO.
+           MOVE BUDGETS-IMPORTE TO WS-IMPORTE-ED
+           PERFORM INICIAR-LINEA
+           STRING "    #" BUDGETS-ID " $" WS-IMPORTE-ED " "
+               DELIMITED BY SIZE INTO WS-LINEA WITH POINTER WS-PUNTERO
+           END-STRING
+           MOVE BUDGETS-DESCRIPCION TO WS-CORTE-ORIGEN
+           MOVE 30 TO WS-CORTE-ANCHO
+           PERFORM AGREGAR-COLUMNA
+           IF PRESUPUESTO-PAGADO
+               MOVE "PAGADO" TO WS-CORTE-ORIGEN
+           ELSE
+               MOVE "PENDIENTE" TO WS-CORTE-ORIGEN
+           END-IF
+           MOVE 9 TO WS-CORTE-ANCHO
+           PERFORM AGREGAR-COLUMNA
+           PERFORM MOSTRAR-LINEA.
 
        POSICIONAR-PRESUPUESTOS-EQUIPO.
            SET HAY-MAS-REGISTROS TO TRUE
@@ -372,11 +402,21 @@
                IF HAY-MAS-REGISTROS
                    ADD 1 TO WS-CANTIDAD
                    PERFORM DESCRIBIR-ESTADO
-                   DISPLAY EQUIPMENTS-ID " " EQUIPMENTS-DNI " "
-                           EQUIPMENTS-TIPO " "
-                           EQUIPMENTS-DESCRIPCION(1:30) " "
-                           FUNCTION TRIM(WS-TEXTO-ESTADO)
-                   END-DISPLAY
+                   PERFORM INICIAR-LINEA
+                   STRING EQUIPMENTS-ID " " EQUIPMENTS-DNI " "
+                       DELIMITED BY SIZE
+                       INTO WS-LINEA WITH POINTER WS-PUNTERO
+                   END-STRING
+                   MOVE EQUIPMENTS-TIPO TO WS-CORTE-ORIGEN
+                   MOVE 15 TO WS-CORTE-ANCHO
+                   PERFORM AGREGAR-COLUMNA
+                   MOVE EQUIPMENTS-DESCRIPCION TO WS-CORTE-ORIGEN
+                   MOVE 30 TO WS-CORTE-ANCHO
+                   PERFORM AGREGAR-COLUMNA
+                   MOVE WS-TEXTO-ESTADO TO WS-CORTE-ORIGEN
+                   MOVE 20 TO WS-CORTE-ANCHO
+                   PERFORM AGREGAR-COLUMNA
+                   PERFORM MOSTRAR-LINEA
                END-IF
            END-PERFORM
            DISPLAY WS-SEPARADOR END-DISPLAY
@@ -396,6 +436,7 @@
                DISPLAY "Ingrese los nuevos datos (ENTER mantiene el "
                        "valor actual, - borra las características)."
                END-DISPLAY
+               PERFORM AVISAR-CANCELACION
 
                MOVE "Tipo:" TO WS-PROMPT
                MOVE 15 TO WS-LARGO-MAXIMO
@@ -423,7 +464,11 @@
                    MOVE WS-ENTRADA TO EQUIPMENTS-PROBLEMA
                END-IF
 
-               PERFORM REGRABAR-EQUIPO
+               IF OPERACION-CANCELADA
+                   DISPLAY "  Operación cancelada." END-DISPLAY
+               ELSE
+                   PERFORM REGRABAR-EQUIPO
+               END-IF
            END-IF.
 
        REGRABAR-EQUIPO.
@@ -544,10 +589,93 @@
                END-IF
            END-IF.
 
+      *-----------------------------------------------------------------
+      * Comprobante de ingreso (comprobantes/ingreso-NNNNN.txt)
+      *-----------------------------------------------------------------
+       COMPROBANTE-INGRESO.
+           DISPLAY " " END-DISPLAY
+           DISPLAY "-- Generar comprobante de ingreso --" END-DISPLAY
+           PERFORM PEDIR-EQUIPO-EXISTENTE
+           IF REGISTRO-ENCONTRADO
+               PERFORM DESCRIBIR-ESTADO
+               MOVE EQUIPMENTS-DNI TO WS-DNI
+               PERFORM BUSCAR-CLIENTE
+               MOVE "comprobantes" TO WS-SUBDIRECTORIO
+               MOVE SPACES TO WS-NOMBRE-TEXTO
+               STRING "ingreso-" EQUIPMENTS-ID ".txt"
+                   DELIMITED BY SIZE INTO WS-NOMBRE-TEXTO
+               END-STRING
+               PERFORM ABRIR-ARCHIVO-TEXTO
+               IF FS-TEXTO-OK
+                   PERFORM ESCRIBIR-COMPROBANTE-INGRESO
+                   PERFORM CERRAR-ARCHIVO-TEXTO
+               END-IF
+           END-IF.
+
+       ESCRIBIR-COMPROBANTE-INGRESO.
+           MOVE EQUIPMENTS-ID TO WS-ID-ED
+           MOVE SPACES TO WS-TITULO
+           STRING "COMPROBANTE DE INGRESO DE EQUIPO N. "
+                  FUNCTION TRIM(WS-ID-ED)
+               DELIMITED BY SIZE INTO WS-TITULO
+           END-STRING
+           PERFORM ESCRIBIR-ENCABEZADO-COMPROBANTE
+           MOVE EQUIPMENTS-FECHA-INGRESO TO WS-FECHA
+           PERFORM FORMATEAR-FECHA
+           MOVE "Ingreso:" TO WS-DATO-ETIQUETA
+           MOVE WS-FECHA-TXT TO WS-DATO-VALOR
+           PERFORM ESCRIBIR-DATO
+           PERFORM ESCRIBIR-RENGLON
+
+           MOVE "CLIENTE" TO WS-DATO-VALOR
+           PERFORM ESCRIBIR-TEXTO
+           MOVE "DNI:" TO WS-DATO-ETIQUETA
+           MOVE CUSTOMERS-DNI TO WS-DATO-VALOR
+           PERFORM ESCRIBIR-DATO
+           MOVE "Nombre:" TO WS-DATO-ETIQUETA
+           MOVE CUSTOMERS-NAME TO WS-DATO-VALOR
+           PERFORM ESCRIBIR-DATO
+           MOVE "Teléfono:" TO WS-DATO-ETIQUETA
+           MOVE CUSTOMERS-CELLPHONE TO WS-DATO-VALOR
+           PERFORM ESCRIBIR-DATO
+           MOVE "Email:" TO WS-DATO-ETIQUETA
+           MOVE CUSTOMERS-EMAIL TO WS-DATO-VALOR
+           PERFORM ESCRIBIR-DATO
+           PERFORM ESCRIBIR-RENGLON
+
+           MOVE "EQUIPO" TO WS-DATO-VALOR
+           PERFORM ESCRIBIR-TEXTO
+           MOVE "Tipo:" TO WS-DATO-ETIQUETA
+           MOVE EQUIPMENTS-TIPO TO WS-DATO-VALOR
+           PERFORM ESCRIBIR-DATO
+           MOVE "Descripción:" TO WS-DATO-ETIQUETA
+           MOVE EQUIPMENTS-DESCRIPCION TO WS-DATO-VALOR
+           PERFORM ESCRIBIR-DATO
+           MOVE "Características:" TO WS-DATO-ETIQUETA
+           MOVE EQUIPMENTS-CARACTERISTICAS TO WS-DATO-VALOR
+           PERFORM ESCRIBIR-DATO
+           MOVE "Problema:" TO WS-DATO-ETIQUETA
+           MOVE EQUIPMENTS-PROBLEMA TO WS-DATO-VALOR
+           PERFORM ESCRIBIR-DATO
+           MOVE "Estado:" TO WS-DATO-ETIQUETA
+           MOVE WS-TEXTO-ESTADO TO WS-DATO-VALOR
+           PERFORM ESCRIBIR-DATO
+           PERFORM ESCRIBIR-RENGLON
+
+           MOVE "  Conserve este comprobante: es necesario para retirar"
+               TO WS-DATO-VALOR
+           PERFORM ESCRIBIR-TEXTO
+           MOVE "  el equipo." TO WS-DATO-VALOR
+           PERFORM ESCRIBIR-TEXTO
+           PERFORM ESCRIBIR-PIE-COMPROBANTE.
+
        CERRAR-ARCHIVOS.
-           CLOSE EQUIPMENTS-FILE CUSTOMERS-FILE BUDGETS-FILE.
+           CLOSE EQUIPMENTS-FILE CUSTOMERS-FILE BUDGETS-FILE
+                 CONTROL-FILE.
 
            COPY "proc-rutas.cpy".
            COPY "proc-comun.cpy".
+           COPY "proc-control.cpy".
+           COPY "proc-texto.cpy".
 
        END PROGRAM EQUIPOS.

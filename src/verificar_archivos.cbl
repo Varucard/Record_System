@@ -17,12 +17,14 @@
            COPY "fc-customers.cpy".
            COPY "fc-equipments.cpy".
            COPY "fc-budgets.cpy".
+           COPY "fc-control.cpy".
 
        DATA DIVISION.
        FILE SECTION.
            COPY "fd-customers.cpy".
            COPY "fd-equipments.cpy".
            COPY "fd-budgets.cpy".
+           COPY "fd-control.cpy".
 
        WORKING-STORAGE SECTION.
            COPY "ws-archivos.cpy".
@@ -62,6 +64,14 @@
            PERFORM INFORMAR-ESTADO
            IF FS-BUDGETS-OK
                CLOSE BUDGETS-FILE
+           END-IF
+
+           OPEN I-O CONTROL-FILE
+           MOVE "control.dat" TO WS-NOMBRE-ARCHIVO
+           MOVE WS-FS-CONTROL TO WS-ESTADO-ARCHIVO
+           PERFORM INFORMAR-ESTADO
+           IF FS-CONTROL-OK
+               CLOSE CONTROL-FILE
            END-IF
 
            GOBACK.

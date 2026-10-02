@@ -55,5 +55,41 @@
        01  WS-CANTIDAD                 PIC 9(5) VALUE ZERO.
        01  WS-CANTIDAD-ED              PIC ZZZZ9.
 
+      * Opción elegida en el menú actual.
+       01  WS-OPCION                   PIC X(10).
+
+      * Ajuste de textos a un ancho en columnas (UTF-8).
+       01  WS-CORTE-ORIGEN             PIC X(200).
+       01  WS-CORTE-ANCHO              PIC 9(3).
+       01  WS-CORTE-RESULTADO          PIC X(400).
+       01  WS-CORTE-LARGO              PIC 9(3).
+       01  WS-CORTE-COLUMNAS           PIC 9(3).
+       01  WS-LINEA                    PIC X(400).
+       01  WS-PUNTERO                  PIC 9(3).
+
+      * Interfaz: clásica (por defecto) o pantalla completa
+      * (RS_INTERFAZ=pantalla) con tema color o verde (RS_TEMA).
+       01  WS-INTERFAZ                 PIC X(20).
+       01  WS-MODO-INTERFAZ            PIC X VALUE "C".
+           88 MODO-CLASICO             VALUE "C".
+           88 MODO-PANTALLA            VALUE "P".
+       01  WS-TEMA                     PIC X VALUE "C".
+           88 TEMA-COLOR               VALUE "C".
+           88 TEMA-VERDE               VALUE "V".
+       01  WS-PAUSA                    PIC X VALUE "N".
+           88 PAUSA-PENDIENTE          VALUE "S".
+           88 SIN-PAUSA                VALUE "N".
+       01  WS-TITULO                   PIC X(60).
+       01  WS-ESC                      PIC X VALUE X"1B".
+       01  WS-COLOR-BASE               PIC X(10).
+       01  WS-COLOR-TITULO             PIC X(12).
+      * ACCEPT ... FROM TIME devuelve HHMMSScc.
+       01  WS-HORA                     PIC 9(8).
+       01  WS-HORA-R REDEFINES WS-HORA.
+           05 WS-HORA-HH               PIC 99.
+           05 WS-HORA-MM               PIC 99.
+           05 WS-HORA-SS               PIC 99.
+           05 WS-HORA-CC               PIC 99.
+
        01  WS-SEPARADOR                PIC X(70) VALUE ALL "-".
        01  WS-SEPARADOR-DOBLE          PIC X(70) VALUE ALL "=".

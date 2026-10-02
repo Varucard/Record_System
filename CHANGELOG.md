@@ -3,6 +3,26 @@
 Todos los cambios relevantes del proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [2.1.0] - 2026-10-02
+
+### Agregado
+- **Modo pantalla** opcional (`--pantalla`, `RS_INTERFAZ=pantalla`): pantalla completa con barra de fecha y hora, títulos en recuadros y pausa tras cada acción. Tema **fósforo verde** (`--verde`). La interfaz clásica sigue siendo la predeterminada.
+- **Búsqueda de clientes** por parte del nombre.
+- **Estado de cuenta por cliente** con el saldo adeudado (usa la clave alternativa `BUDGETS-DNI`).
+- **Comprobantes imprimibles**: ingreso de equipo, presupuesto y recibo de pago (`data/comprobantes/`), con el nombre del negocio de `RS_EMPRESA`.
+- **Exportación a CSV** para Excel (`data/exportes/`), con separador `;` y UTF-8 con BOM.
+- Cancelación de altas y modificaciones con `*`.
+- Opciones `--clasica`, `--pantalla` y `--verde` en el lanzador, y `make run INTERFAZ=...`.
+- CI también en ramas `feature/**` y `fix/**`.
+
+### Cambiado
+- Reportes pasa a ser un submenú (reporte general y exportación).
+- Columnas de listados y reportes alineadas por caracteres (antes los acentos las corrían).
+
+### Corregido
+- Los números de equipo y presupuesto ya no se reutilizan al borrar el último (`control.dat`).
+- Los listados ya no parten caracteres acentuados al recortar textos.
+
 ## [2.0.0] - 2026-10-02
 
 ### Agregado

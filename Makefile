@@ -7,6 +7,8 @@ COBFLAGS  ?= -std=default -Wall -fstatic-call -I src/copybooks
 BIN_DIR   := bin
 TARGET    := $(BIN_DIR)/record_system
 DATA_DIR  ?= data
+# Interfaz para "make run": clasica, pantalla o verde.
+INTERFAZ  ?= clasica
 
 # El programa principal va primero: es el punto de entrada (-x).
 SOURCES   := src/record_system.cbl \
@@ -32,6 +34,7 @@ help:
 	@echo "Objetivos disponibles:"
 	@echo "  make build         Compila el sistema en $(TARGET)"
 	@echo "  make run           Compila y ejecuta (datos en ./$(DATA_DIR))"
+	@echo "                     INTERFAZ=pantalla o verde: pantalla completa"
 	@echo "  make backup        Copia los datos a backups/<fecha-hora>/"
 	@echo "  make test          Ejecuta las pruebas automatizadas"
 	@echo "  make lint          Verifica el formato fijo (columna 72)"
@@ -49,7 +52,7 @@ $(TARGET): $(SOURCES) $(COPYBOOKS)
 
 run: build
 	RS_DATA_DIR=$(DATA_DIR) RS_BIN=$(abspath $(TARGET)) \
-		./scripts/record-system.sh
+		./scripts/record-system.sh --$(INTERFAZ)
 
 test: build lint
 	./tests/run_tests.sh $(TARGET)
