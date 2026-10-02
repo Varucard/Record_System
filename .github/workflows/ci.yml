@@ -1,0 +1,19 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+jobs:
+  build-and-test:
+    name: Compilar y probar
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compilar y ejecutar pruebas (etapa test del Dockerfile)
+        run: docker build --target test -t record-system:test .
+
+      - name: Construir imagen final
+        run: docker build -t record-system:latest .

@@ -1,15 +1,15 @@
-     IDENTIFICATION DIVISION.
+       IDENTIFICATION DIVISION.
        PROGRAM-ID. OUTPUT-PHYSICAL.
        ENVIRONMENT DIVISION.
        INPUT-OUTPUT SECTION.
-      *Archivo fÌsico en modo din·mico.
+      *Archivo f√≠sico en modo din√°mico.
        FILE-CONTROL.
-       COPY "PHYSICAL-FILE.cbl".
+       COPY "PHYSICAL-FILE.cpy".
 
        DATA DIVISION.
        FILE SECTION.
-      *Archivo lÛgico.
-       COPY "LOGICAL-FILE.cbl".
+      *Archivo l√≥gico.
+       COPY "LOGICAL-FILE.cpy".
        WORKING-STORAGE SECTION.
        PROCEDURE DIVISION.
 

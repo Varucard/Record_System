@@ -5,7 +5,7 @@
 
        FILE-CONTROL.
        SELECT OPTIONAL EMPLEADOS-ARCHIVO
-       ASSIGN TO "C:\Desarrollos\Record_System\original_code\empleados.dat"
+       ASSIGN TO "empleados.dat"
        ORGANIZATION IS LINE SEQUENTIAL.
 
        DATA DIVISION.
@@ -34,35 +34,35 @@
            05 TEXTO-DIRECCION PIC X(10) VALUE "Direccion:".
            05 MUESTRA-DIRECCION PIC X(35).
 
-           01  FIN-DEL-ARCHIVO PIC X.
-           01  MAXIMO-REGISTROS PIC 99.
-           01  GUARDA-ENTER PIC X.
-           PROCEDURE DIVISION.
+       01  FIN-DEL-ARCHIVO PIC X.
+       01  MAXIMO-REGISTROS PIC 99.
+       01  GUARDA-ENTER PIC X.
+       PROCEDURE DIVISION.
 
-           EMPIEZA-PROGRAMA.
+       EMPIEZA-PROGRAMA.
            PERFORM APERTURA-ARCHIVO.
            MOVE ZEROES TO MAXIMO-REGISTROS.
            MOVE "1" TO FIN-DEL-ARCHIVO.
            PERFORM LEE-SIGUIENTE-REGISTRO.
            PERFORM MUESTRA-REGISTROS
-           UNTIL FIN-DEL-ARCHIVO = "0".
+               UNTIL FIN-DEL-ARCHIVO = "0".
            PERFORM CIERRE-ARCHIVO.
-           PROGRAM-DONE.
+       PROGRAM-DONE.
            STOP RUN.
 
-           APERTURA-ARCHIVO.
+       APERTURA-ARCHIVO.
            OPEN INPUT EMPLEADOS-ARCHIVO.
 
-           CIERRE-ARCHIVO.
+       CIERRE-ARCHIVO.
            CLOSE EMPLEADOS-ARCHIVO.
 
-           MUESTRA-REGISTROS.
+       MUESTRA-REGISTROS.
            PERFORM MUESTRA-CAMPOS.
            PERFORM LEE-SIGUIENTE-REGISTRO.
 
-           MUESTRA-CAMPOS.
+       MUESTRA-CAMPOS.
            IF MAXIMO-REGISTROS = 10
-           PERFORM PULSAR-ENTER.
+               PERFORM PULSAR-ENTER.
            MOVE EMPLEADOS-ID TO MUESTRA-ID.
            MOVE EMPLEADOS-NOMBRE TO MUESTRA-NOMBRE.
            MOVE EMPLEADOS-APELLIDOS TO MUESTRA-APELLIDOS.
@@ -70,16 +70,17 @@
            MOVE EMPLEADOS-TELEFONO TO MUESTRA-TELEFONO.
            MOVE EMPLEADOS-DIRECCION TO MUESTRA-DIRECCION.
            DISPLAY PRESENTACION.
-           DISPLAY ADD MUESTRA-ID TO "1".
            ADD 1 TO MAXIMO-REGISTROS.
 
-           LEE-SIGUIENTE-REGISTRO.
+       LEE-SIGUIENTE-REGISTRO.
            READ EMPLEADOS-ARCHIVO NEXT RECORD
-           AT END
-           MOVE "0" TO FIN-DEL-ARCHIVO.
+               AT END
+               MOVE "0" TO FIN-DEL-ARCHIVO.
 
-           PULSAR-ENTER.
+       PULSAR-ENTER.
            DISPLAY
-           "Presione la tecla ENTER para ver la siguiente pagina...".
+               "Presione ENTER para ver la siguiente pagina...".
            ACCEPT GUARDA-ENTER.
            MOVE ZEROES TO MAXIMO-REGISTROS.
+
+       END PROGRAM READ-FILES.
