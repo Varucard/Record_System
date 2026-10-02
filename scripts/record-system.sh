@@ -6,8 +6,27 @@
 #  - Impide abrir dos instancias sobre los mismos datos: los archivos
 #    indexados no admiten escrituras concurrentes y se perderían datos.
 #
+# Opciones:
+#   --pantalla   interfaz de pantalla completa (RS_INTERFAZ=pantalla)
+#   --verde      tema de fósforo verde para el modo pantalla
+#   --clasica    interfaz clásica de línea (por defecto)
+#
 # Variables: RS_DATA_DIR (por defecto "data") y RS_BIN (ruta del
 # ejecutable; por defecto "record_system" del PATH).
+
+for opcion in "$@"; do
+    case "$opcion" in
+        --pantalla) export RS_INTERFAZ=pantalla ;;
+        --verde)    export RS_INTERFAZ=pantalla RS_TEMA=verde ;;
+        --clasica)  export RS_INTERFAZ=clasica ;;
+        -h|--help)
+            echo "Uso: record-system [--clasica | --pantalla | --verde]"
+            exit 0 ;;
+        *)
+            echo "Opción desconocida: $opcion (use --help)" >&2
+            exit 64 ;;
+    esac
+done
 
 DATA_DIR="${RS_DATA_DIR:-data}"
 BIN="${RS_BIN:-record_system}"
@@ -33,4 +52,4 @@ else
     echo "una sola instancia abierta." >&2
 fi
 
-"$BIN" "$@"
+"$BIN"

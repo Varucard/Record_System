@@ -1,6 +1,6 @@
       ******************************************************************
-      * Purpose: ABM de clientes (alta, consulta, listado,
-      *          modificación y baja).
+      * Purpose: ABM de clientes (alta, consulta, listado, búsqueda
+      *          por nombre, modificación y baja).
       * Parámetros:
       *   LK-DIRECTORIO-DATOS (entrada)  directorio de los .dat
       ******************************************************************
@@ -25,6 +25,10 @@
            COPY "ws-archivos.cpy".
            COPY "ws-comun.cpy".
        01  WS-TEXTO-ESTADO             PIC X(20).
+       01  WS-BUSQUEDA                 PIC X(40).
+       01  WS-LARGO-BUSQUEDA           PIC 9(3).
+       01  WS-NOMBRE-MAYUSCULAS        PIC X(40).
+       01  WS-COINCIDENCIAS            PIC 9(3).
 
        LINKAGE SECTION.
            COPY "lk-comun.cpy".
@@ -32,6 +36,7 @@
        PROCEDURE DIVISION USING LK-DIRECTORIO-DATOS.
        INICIO-CLIENTES.
            PERFORM ARMAR-RUTAS
+           PERFORM INICIAR-INTERFAZ
            OPEN I-O CUSTOMERS-FILE
            OPEN INPUT EQUIPMENTS-FILE
            IF NOT FS-CUSTOMERS-OK OR NOT FS-EQUIPMENTS-OK
@@ -47,29 +52,34 @@
            GOBACK.
 
        MENU-CLIENTES.
-           DISPLAY " " END-DISPLAY
-           DISPLAY WS-SEPARADOR-DOBLE END-DISPLAY
-           DISPLAY "  CLIENTES" END-DISPLAY
-           DISPLAY WS-SEPARADOR-DOBLE END-DISPLAY
+           PERFORM PREPARAR-PANTALLA
+           MOVE "CLIENTES" TO WS-TITULO
+           PERFORM MOSTRAR-TITULO
            DISPLAY "  1. Registrar cliente" END-DISPLAY
            DISPLAY "  2. Consultar cliente" END-DISPLAY
            DISPLAY "  3. Listar clientes" END-DISPLAY
            DISPLAY "  4. Modificar cliente" END-DISPLAY
            DISPLAY "  5. Eliminar cliente" END-DISPLAY
+           DISPLAY "  6. Buscar clientes por nombre" END-DISPLAY
            DISPLAY "  0. Volver al menú principal" END-DISPLAY
            MOVE "Opción:" TO WS-PROMPT
            PERFORM MOSTRAR-PROMPT
            PERFORM LEER-ENTRADA
-           EVALUATE WS-ENTRADA
+           MOVE WS-ENTRADA TO WS-OPCION
+           EVALUATE WS-OPCION
                WHEN "1" PERFORM ALTA-CLIENTE
                WHEN "2" PERFORM CONSULTA-CLIENTE
                WHEN "3" PERFORM LISTADO-CLIENTES
                WHEN "4" PERFORM MODIFICACION-CLIENTE
                WHEN "5" PERFORM BAJA-CLIENTE
+               WHEN "6" PERFORM BUSQUEDA-CLIENTES
                WHEN "0" SET SALIR-MENU TO TRUE
                WHEN OTHER
                    DISPLAY "  Opción inválida." END-DISPLAY
-           END-EVALUATE.
+           END-EVALUATE
+           IF WS-OPCION NOT = "0"
+               PERFORM MARCAR-PAUSA
+           END-IF.
 
       *-----------------------------------------------------------------
       * Alta
@@ -87,15 +97,13 @@
                            ": " FUNCTION TRIM(CUSTOMERS-NAME)
                    END-DISPLAY
                ELSE
+                   PERFORM AVISAR-CANCELACION
                    PERFORM CARGAR-DATOS-CLIENTE
-                   WRITE CUSTOMERS-REGISTERS
-                       INVALID KEY
-                           DISPLAY "  Error al grabar (file status "
-                                   WS-FS-CUSTOMERS ")." END-DISPLAY
-                       NOT INVALID KEY
-                           DISPLAY "  Cliente registrado "
-                                   "correctamente." END-DISPLAY
-                   END-WRITE
+                   IF OPERACION-CANCELADA
+                       DISPLAY "  Operación cancelada." END-DISPLAY
+                   ELSE
+                       PERFORM GRABAR-CLIENTE-NUEVO
+                   END-IF
                END-IF
            END-IF.
 
@@ -119,6 +127,16 @@
            MOVE WS-ENTRADA TO CUSTOMERS-ADDRESS
            PERFORM OBTENER-FECHA-HOY
            MOVE WS-FECHA-HOY TO CUSTOMERS-FECHA-ALTA.
+
+       GRABAR-CLIENTE-NUEVO.
+           WRITE CUSTOMERS-REGISTERS
+               INVALID KEY
+                   DISPLAY "  Error al grabar (file status "
+                           WS-FS-CUSTOMERS ")." END-DISPLAY
+               NOT INVALID KEY
+                   DISPLAY "  Cliente registrado correctamente."
+                   END-DISPLAY
+           END-WRITE.
 
       *-----------------------------------------------------------------
       * Consulta
@@ -208,9 +226,20 @@
                WHEN OTHER
                    MOVE "?" TO WS-TEXTO-ESTADO
            END-EVALUATE
-           DISPLAY "    #" EQUIPMENTS-ID " " EQUIPMENTS-TIPO " "
-                   EQUIPMENTS-DESCRIPCION(1:30) " "
-                   FUNCTION TRIM(WS-TEXTO-ESTADO) END-DISPLAY.
+           PERFORM INICIAR-LINEA
+           STRING "    #" EQUIPMENTS-ID " " DELIMITED BY SIZE
+               INTO WS-LINEA WITH POINTER WS-PUNTERO
+           END-STRING
+           MOVE EQUIPMENTS-TIPO TO WS-CORTE-ORIGEN
+           MOVE 15 TO WS-CORTE-ANCHO
+           PERFORM AGREGAR-COLUMNA
+           MOVE EQUIPMENTS-DESCRIPCION TO WS-CORTE-ORIGEN
+           MOVE 30 TO WS-CORTE-ANCHO
+           PERFORM AGREGAR-COLUMNA
+           MOVE WS-TEXTO-ESTADO TO WS-CORTE-ORIGEN
+           MOVE 20 TO WS-CORTE-ANCHO
+           PERFORM AGREGAR-COLUMNA
+           PERFORM MOSTRAR-LINEA.
 
       * Posiciona el archivo de equipos en el primer equipo del DNI.
        POSICIONAR-EQUIPOS-CLIENTE.
@@ -245,9 +274,7 @@
        LISTADO-CLIENTES.
            DISPLAY " " END-DISPLAY
            DISPLAY "-- Listado de clientes --" END-DISPLAY
-           DISPLAY "DNI      NOMBRE                         "
-                   "TELÉFONO        EMAIL" END-DISPLAY
-           DISPLAY WS-SEPARADOR END-DISPLAY
+           PERFORM MOSTRAR-ENCABEZADO-CLIENTES
            MOVE ZERO TO WS-CANTIDAD WS-LINEAS-MOSTRADAS
            SET HAY-MAS-REGISTROS TO TRUE
            MOVE LOW-VALUES TO CUSTOMERS-DNI
@@ -266,17 +293,89 @@
                END-IF
                IF HAY-MAS-REGISTROS
                    ADD 1 TO WS-CANTIDAD
-                   DISPLAY CUSTOMERS-DNI " "
-                           CUSTOMERS-NAME(1:30) " "
-                           CUSTOMERS-CELLPHONE " "
-                           FUNCTION TRIM(CUSTOMERS-EMAIL)
-                   END-DISPLAY
+                   PERFORM MOSTRAR-RENGLON-CLIENTE
                END-IF
            END-PERFORM
            DISPLAY WS-SEPARADOR END-DISPLAY
            MOVE WS-CANTIDAD TO WS-CANTIDAD-ED
            DISPLAY "Total de clientes: " FUNCTION TRIM(WS-CANTIDAD-ED)
            END-DISPLAY.
+
+       MOSTRAR-ENCABEZADO-CLIENTES.
+           DISPLAY "DNI      NOMBRE                         "
+                   "TELÉFONO        EMAIL" END-DISPLAY
+           DISPLAY WS-SEPARADOR END-DISPLAY.
+
+       MOSTRAR-RENGLON-CLIENTE.
+           PERFORM INICIAR-LINEA
+           MOVE CUSTOMERS-DNI TO WS-CORTE-ORIGEN
+           MOVE 8 TO WS-CORTE-ANCHO
+           PERFORM AGREGAR-COLUMNA
+           MOVE CUSTOMERS-NAME TO WS-CORTE-ORIGEN
+           MOVE 30 TO WS-CORTE-ANCHO
+           PERFORM AGREGAR-COLUMNA
+           MOVE CUSTOMERS-CELLPHONE TO WS-CORTE-ORIGEN
+           MOVE 15 TO WS-CORTE-ANCHO
+           PERFORM AGREGAR-COLUMNA
+           MOVE CUSTOMERS-EMAIL TO WS-CORTE-ORIGEN
+           MOVE 50 TO WS-CORTE-ANCHO
+           PERFORM AGREGAR-COLUMNA
+           PERFORM MOSTRAR-LINEA.
+
+      *-----------------------------------------------------------------
+      * Búsqueda por nombre (parte del nombre, sin distinguir
+      * mayúsculas de minúsculas)
+      *-----------------------------------------------------------------
+       BUSQUEDA-CLIENTES.
+           DISPLAY " " END-DISPLAY
+           DISPLAY "-- Buscar clientes por nombre --" END-DISPLAY
+           MOVE "Nombre o parte del nombre (ENTER cancela):"
+               TO WS-PROMPT
+           PERFORM MOSTRAR-PROMPT
+           PERFORM LEER-ENTRADA
+           IF WS-ENTRADA = SPACES
+               DISPLAY "  Operación cancelada." END-DISPLAY
+           ELSE
+               MOVE FUNCTION UPPER-CASE(WS-ENTRADA) TO WS-BUSQUEDA
+               COMPUTE WS-LARGO-BUSQUEDA =
+                   FUNCTION LENGTH(FUNCTION TRIM(WS-BUSQUEDA))
+               PERFORM MOSTRAR-ENCABEZADO-CLIENTES
+               MOVE ZERO TO WS-CANTIDAD WS-LINEAS-MOSTRADAS
+               SET HAY-MAS-REGISTROS TO TRUE
+               MOVE LOW-VALUES TO CUSTOMERS-DNI
+               START CUSTOMERS-FILE KEY IS NOT LESS THAN CUSTOMERS-DNI
+                   INVALID KEY SET FIN-LECTURA TO TRUE
+               END-START
+               PERFORM UNTIL FIN-LECTURA
+                   READ CUSTOMERS-FILE NEXT RECORD
+                       AT END SET FIN-LECTURA TO TRUE
+                   END-READ
+                   IF NOT FS-CUSTOMERS-OK
+                       SET FIN-LECTURA TO TRUE
+                   END-IF
+                   IF HAY-MAS-REGISTROS
+                       PERFORM EVALUAR-COINCIDENCIA
+                   END-IF
+               END-PERFORM
+               DISPLAY WS-SEPARADOR END-DISPLAY
+               MOVE WS-CANTIDAD TO WS-CANTIDAD-ED
+               DISPLAY "Clientes encontrados: "
+                       FUNCTION TRIM(WS-CANTIDAD-ED) END-DISPLAY
+           END-IF.
+
+       EVALUAR-COINCIDENCIA.
+           MOVE FUNCTION UPPER-CASE(CUSTOMERS-NAME)
+               TO WS-NOMBRE-MAYUSCULAS
+           MOVE ZERO TO WS-COINCIDENCIAS
+           INSPECT WS-NOMBRE-MAYUSCULAS TALLYING WS-COINCIDENCIAS
+               FOR ALL WS-BUSQUEDA(1:WS-LARGO-BUSQUEDA)
+           IF WS-COINCIDENCIAS > ZERO
+               PERFORM CONTROLAR-PAGINA
+               IF HAY-MAS-REGISTROS
+                   ADD 1 TO WS-CANTIDAD
+                   PERFORM MOSTRAR-RENGLON-CLIENTE
+               END-IF
+           END-IF.
 
       *-----------------------------------------------------------------
       * Modificación (ENTER mantiene el valor actual)
@@ -289,6 +388,7 @@
                PERFORM MOSTRAR-CLIENTE
                DISPLAY "Ingrese los nuevos datos (ENTER mantiene el "
                        "valor actual, - lo borra)." END-DISPLAY
+               PERFORM AVISAR-CANCELACION
 
                MOVE "Nombre y apellido:" TO WS-PROMPT
                MOVE 40 TO WS-LARGO-MAXIMO
@@ -317,14 +417,19 @@
                PERFORM ACTUALIZAR-CAMPO
                MOVE WS-ENTRADA TO CUSTOMERS-ADDRESS
 
-               REWRITE CUSTOMERS-REGISTERS
-                   INVALID KEY
-                       DISPLAY "  Error al actualizar (file status "
-                               WS-FS-CUSTOMERS ")." END-DISPLAY
-                   NOT INVALID KEY
-                       DISPLAY "  Cliente actualizado correctamente."
-                       END-DISPLAY
-               END-REWRITE
+               IF OPERACION-CANCELADA
+                   DISPLAY "  Operación cancelada." END-DISPLAY
+               ELSE
+                   REWRITE CUSTOMERS-REGISTERS
+                       INVALID KEY
+                           DISPLAY "  Error al actualizar (file "
+                                   "status " WS-FS-CUSTOMERS ")."
+                           END-DISPLAY
+                       NOT INVALID KEY
+                           DISPLAY "  Cliente actualizado "
+                                   "correctamente." END-DISPLAY
+                   END-REWRITE
+               END-IF
            END-IF.
 
       *-----------------------------------------------------------------

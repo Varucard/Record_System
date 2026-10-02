@@ -261,7 +261,7 @@ lines < <(alta_cliente 30123456 "Juan Pérez"
           printf '%s\n' 2 6 2 2 0
           echo 0)
 run_system "${_LINES[@]}"
-run_system 4 0
+run_system 4 1 0 0
 expect "Clientes registrados:               1"
 expect "Equipos registrados:                2"
 expect "Presupuestos emitidos:              3"
@@ -388,6 +388,158 @@ expect "Operación cancelada."
 expect "La fecha no puede ser anterior al 10/09/2026."
 expect "Pago registrado correctamente."
 expect_count 1 "Equipo actualizado correctamente."
+end_case
+
+# -----------------------------------------------------------------------
+start_case "no reutiliza números de equipos ni presupuestos borrados"
+lines < <(alta_cliente 30123456 "Juan Pérez"
+          alta_equipo 30123456 Notebook "Uno"
+          alta_equipo 30123456 Notebook "Dos"
+          alta_presupuesto 1 "Primero" 1000
+          alta_presupuesto 1 "Segundo" 2000
+          printf '%s\n' 2 7 2 S 0
+          printf '%s\n' 3 8 2 S 0
+          alta_equipo 30123456 PC "Tres"
+          alta_presupuesto 1 "Tercero" 3000
+          echo 0)
+run_system "${_LINES[@]}"
+expect "Equipo eliminado."
+expect "Presupuesto eliminado."
+expect "Equipo registrado con el número 3."
+expect "Presupuesto registrado con el número 3."
+end_case
+
+# -----------------------------------------------------------------------
+start_case "busca clientes por parte del nombre"
+lines < <(alta_cliente 30123456 "Juan Pérez"
+          alta_cliente 4111222 "Ana Gómez"
+          alta_cliente 22333444 "JUANA Ruiz"
+          echo 0)
+run_system "${_LINES[@]}"
+run_system 1 6 juan 0 0
+expect "Clientes encontrados: 2"
+expect "30123456 Juan Pérez"
+expect "22333444 JUANA Ruiz"
+expect_not "Ana Gómez"
+end_case
+
+# -----------------------------------------------------------------------
+start_case "muestra el estado de cuenta de un cliente"
+lines < <(alta_cliente 30123456 "Juan Pérez"
+          alta_cliente 4111222 "Ana Gómez"
+          alta_equipo 30123456 Notebook "Lenovo"
+          alta_equipo 4111222 PC "Gamer"
+          alta_presupuesto 1 "Fuente" 45000
+          alta_presupuesto 1 "Limpieza" "12.000,50"
+          alta_presupuesto 2 "Otro cliente" 99000
+          printf '%s\n' 3 6 1 1 "" 0
+          echo 0)
+run_system "${_LINES[@]}"
+run_system 3 9 30123456 0 0
+expect "Estado de cuenta: Juan Pérez (DNI 30123456)"
+expect "Total: 2 presupuesto(s) por \$ 57.000,50"
+expect "Saldo adeudado: \$ 12.000,50"
+expect_not "Otro cliente"
+end_case
+
+# -----------------------------------------------------------------------
+start_case "genera comprobantes de ingreso, presupuesto y recibo"
+lines < <(alta_cliente 30123456 "Juan Pérez"
+          alta_equipo 30123456 Notebook "Lenovo T14"
+          alta_presupuesto 1 "Cambio de fuente" 45000
+          alta_presupuesto 1 "Limpieza" 5000
+          printf '%s\n' 3 6 2 4 "" 0
+          echo 0)
+run_system "${_LINES[@]}"
+OUTPUT="$(printf '%s\n' 2 8 1 0 3 10 1 10 2 0 0 \
+    | RS_EMPRESA="Taller Varucard" RS_DATA_DIR="$DATA_DIR" "$BIN" 2>&1)"
+expect "comprobantes/ingreso-00001.txt"
+expect "comprobantes/presupuesto-00001.txt"
+expect "comprobantes/recibo-00002.txt"
+OUTPUT="$(cat "$DATA_DIR/comprobantes/ingreso-00001.txt" 2>&1)"
+expect "Taller Varucard"
+expect "COMPROBANTE DE INGRESO DE EQUIPO N. 1"
+expect "Nombre:          Juan Pérez"
+expect "Descripción:     Lenovo T14"
+expect "Firma del cliente"
+OUTPUT="$(cat "$DATA_DIR/comprobantes/presupuesto-00001.txt" 2>&1)"
+expect "PRESUPUESTO N. 1"
+expect "Importe:         \$ 45.000,00"
+expect "PENDIENTE DE PAGO"
+OUTPUT="$(cat "$DATA_DIR/comprobantes/recibo-00002.txt" 2>&1)"
+expect "RECIBO DE PAGO - PRESUPUESTO N. 2"
+expect "Forma de pago:   Transferencia"
+end_case
+
+# -----------------------------------------------------------------------
+start_case "exporta los datos a CSV para Excel"
+lines < <(alta_cliente 30123456 "Juan Pérez"
+          alta_equipo 30123456 Notebook 'Pantalla "rota"; urgente'
+          alta_presupuesto 1 "Cambio de fuente" "45.000,50"
+          echo 0)
+run_system "${_LINES[@]}"
+run_system 4 2 0 0
+expect "exportes/clientes.csv"
+expect "(1 registro(s))"
+CSV_DIR="$DATA_DIR/exportes"
+OUTPUT="$(head -c 3 "$CSV_DIR/clientes.csv" | od -An -tx1 | tr -d ' ')"
+expect "efbbbf"
+OUTPUT="$(cat "$CSV_DIR/clientes.csv" "$CSV_DIR/equipos.csv" \
+              "$CSV_DIR/presupuestos.csv" 2>&1)"
+expect '"DNI";"Nombre";"Teléfono";"Email";"Dirección";"Fecha de alta"'
+expect '"30123456";"Juan Pérez";"1155550000";"cliente@mail.com";"Calle 123";"02/10/2026"'
+expect '"Pantalla ""rota""; urgente"'
+expect ';45000,50;'
+expect '"No";""'
+end_case
+
+# -----------------------------------------------------------------------
+start_case "un * cancela el alta en cualquier dato"
+lines < <(alta_cliente 30123456 "Juan Pérez"
+          alta_equipo 30123456 Notebook "Lenovo"
+          echo 0)
+run_system "${_LINES[@]}"
+run_system 1 1 22333444 "Ana" "*" 3 0 \
+           3 1 1 "Trabajo" "*" 3 0 0
+expect "(Escriba * en cualquier dato para cancelar.)"
+expect_count 2 "Operación cancelada."
+expect "Total de clientes: 1"
+expect "Total: 0 presupuesto(s)"
+expect_not "Email (opcional):"
+end_case
+
+# -----------------------------------------------------------------------
+start_case "recorta textos largos sin partir caracteres acentuados"
+lines < <(alta_cliente 30123456 "Juan Pérez"
+          alta_equipo 30123456 "Notebook" \
+              "$(printf 'á%.0s' {1..40})"
+          echo 0)
+run_system "${_LINES[@]}"
+run_system 2 3 0 0
+expect "Notebook        $(printf 'á%.0s' {1..30}) Ingresado"
+if ! iconv -f UTF-8 -t UTF-8 <<<"$OUTPUT" >/dev/null 2>&1; then
+    fail "la salida contiene UTF-8 inválido"
+fi
+end_case
+
+# -----------------------------------------------------------------------
+start_case "la interfaz clásica no usa secuencias de escape"
+run_system 1 0 0
+expect_not $'\e['
+end_case
+
+# -----------------------------------------------------------------------
+start_case "el modo pantalla limpia la pantalla y pausa tras cada acción"
+OUTPUT="$(printf '%s\n' "" 1 3 "" 0 0 \
+    | RS_INTERFAZ=pantalla RS_TEMA=verde RS_DATA_DIR="$DATA_DIR" \
+      "$BIN" 2>&1)"
+EXIT_CODE=$?
+expect $'\e[2J'
+expect $'\e[0;32m'
+expect "| "
+expect "Presione ENTER para continuar..."
+expect "Hasta luego."
+expect_exit_code 0
 end_case
 
 # -----------------------------------------------------------------------

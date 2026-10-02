@@ -5,7 +5,9 @@
 
 Sistema de registros para un **servicio técnico de equipos informáticos**, escrito en **COBOL** (GnuCOBOL).
 
-Permite gestionar clientes, los equipos que ingresan a reparación, los presupuestos de cada trabajo y sus pagos. Los datos se guardan en archivos `.dat` **indexados**, y el sistema crea y verifica esos archivos al iniciar.
+Permite gestionar clientes, los equipos que ingresan a reparación, los presupuestos de cada trabajo y sus pagos. Además emite comprobantes y exporta los datos a Excel. Los datos se guardan en archivos `.dat` **indexados**, y el sistema crea y verifica esos archivos al iniciar.
+
+Tiene dos interfaces: la **clásica**, de terminal a la antigua (la de siempre, por defecto), y un **modo pantalla** opcional, con pantalla completa, recuadros y colores (incluido un tema de fósforo verde estilo mainframe).
 
 ```
 ======================================================================
@@ -23,10 +25,10 @@ Opción:
 
 | Módulo | Operaciones |
 |---|---|
-| **Clientes** | Alta, consulta (con sus equipos), listado, modificación y baja. |
-| **Equipos** | Ingreso con número automático, consulta (con sus presupuestos), listado general y por cliente, modificación, cambio de estado (*Ingresado*, *En reparación*, *Listo para retirar*, *Entregado*) y baja. |
-| **Presupuestos y pagos** | Alta asociada a un equipo, consulta, listado general, por equipo y pendientes de pago, registro del pago (forma y fecha), modificación y baja. |
-| **Reportes** | Totales de clientes, equipos por estado, presupuestos pagados y pendientes, monto cobrado, monto adeudado y recaudación por forma de pago. |
+| **Clientes** | Alta, consulta (con sus equipos), listado, búsqueda por parte del nombre, modificación y baja. |
+| **Equipos** | Ingreso con número automático, consulta (con sus presupuestos), listado general y por cliente, modificación, cambio de estado (*Ingresado*, *En reparación*, *Listo para retirar*, *Entregado*), baja y **comprobante de ingreso** para el cliente. |
+| **Presupuestos y pagos** | Alta asociada a un equipo, consulta, listado general, por equipo y pendientes de pago, registro del pago (forma y fecha), modificación, baja, **estado de cuenta por cliente** (saldo adeudado) y **comprobante** de presupuesto o recibo de pago. |
+| **Reportes** | Reporte general (clientes, equipos por estado, presupuestos pagados y pendientes, monto cobrado y adeudado, recaudación por forma de pago) y **exportación a CSV** para Excel. |
 
 Reglas de negocio:
 
@@ -38,7 +40,34 @@ Reglas de negocio:
 - Los importes usan el formato argentino: `15.000,50` (también se acepta `15000.50`). Se muestran como `$ 15.000,50`.
 - Se validan el email, las fechas (`DD/MM/AAAA`, con ENTER se toma la fecha de hoy) y el largo de cada dato, para que nada se guarde cortado.
 - En las modificaciones, ENTER mantiene el valor actual y `-` borra un dato opcional. En las búsquedas, ENTER cancela la operación.
+- Escribir `*` en cualquier dato cancela el alta o la modificación en curso sin grabar nada.
+- Los números de equipo y de presupuesto nunca se reutilizan, aunque se borre el último (`control.dat`).
 - Los listados se paginan cada 20 renglones: ENTER continúa y `0` termina el listado.
+
+## Interfaces
+
+| Interfaz | Cómo se activa | Descripción |
+|---|---|---|
+| **Clásica** (por defecto) | — | Terminal de línea a la antigua: menús numerados, todo queda en pantalla. Funciona en cualquier terminal y permite automatizar con entrada redirigida. |
+| **Pantalla** | `--pantalla` o `RS_INTERFAZ=pantalla` | Pantalla completa: limpia la pantalla entre menús, barra superior con fecha y hora, títulos en recuadros con color y pausa para leer cada resultado. |
+| **Verde** | `--verde` o `RS_TEMA=verde` | Modo pantalla con tema de fósforo verde, estilo terminal de mainframe. |
+
+```bash
+make run                       # clásica
+make run INTERFAZ=pantalla     # pantalla completa
+make run INTERFAZ=verde        # pantalla completa, fósforo verde
+docker compose run --rm record-system --verde
+```
+
+## Comprobantes y exportación
+
+- **Comprobantes**: se generan como texto listo para imprimir en `data/comprobantes/`:
+  - `ingreso-NNNNN.txt`: ingreso del equipo, con datos del cliente y firma;
+  - `presupuesto-NNNNN.txt`: presupuesto pendiente;
+  - `recibo-NNNNN.txt`: recibo, si el presupuesto ya está pagado.
+
+  El nombre del negocio se toma de `RS_EMPRESA`.
+- **Exportación CSV** (Reportes → 2): genera `clientes.csv`, `equipos.csv` y `presupuestos.csv` en `data/exportes/`, con separador `;` y codificación UTF-8 con BOM, para abrirlos directamente en Excel con acentos e importes correctos.
 
 ## Inicio rápido con Docker (recomendado)
 
@@ -99,7 +128,7 @@ Si se ejecuta `bin/record_system` directamente, este control no se aplica.
 
 ## Respaldos
 
-Cada archivo `.dat` tiene índices asociados (`.dat.1`, `.dat.2`) que deben copiarse junto con él. `make backup` copia todo a `backups/<fecha-hora>/`. Para restaurar, copie esos archivos de vuelta a `data/` con el sistema cerrado.
+Cada archivo `.dat` tiene índices asociados (`.dat.1`, `.dat.2`) que deben copiarse junto con él, y `control.dat` guarda la numeración. `make backup` copia todos los `.dat*` a `backups/<fecha-hora>/`. Para restaurar, copie esos archivos de vuelta a `data/` con el sistema cerrado.
 
 ## Configuración
 
@@ -107,6 +136,9 @@ Cada archivo `.dat` tiene índices asociados (`.dat.1`, `.dat.2`) que deben copi
 |---|---|---|
 | `RS_DATA_DIR` | Directorio donde se guardan los archivos `.dat`. El lanzador lo crea si no existe. | `data` |
 | `RS_BIN` | Ejecutable que inicia el lanzador. | `record_system` del `PATH` |
+| `RS_INTERFAZ` | `clasica` o `pantalla`. | `clasica` |
+| `RS_TEMA` | Tema del modo pantalla: `color` o `verde`. | `color` |
+| `RS_EMPRESA` | Nombre del negocio en los comprobantes. | `Servicio Técnico` |
 | `RS_FECHA_HOY` | Fija la fecha "de hoy" (`AAAAMMDD`). Se usa en las pruebas. | fecha del sistema |
 | `TZ` | Zona horaria (Docker). | `America/Argentina/Buenos_Aires` |
 
@@ -139,7 +171,11 @@ En [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) se describen los módulos, el di
 `make test` (o `make docker-test`) ejecuta:
 
 1. **Chequeo de formato** (`tests/check_format.sh`): ninguna línea supera la columna 72, sin tabulaciones ni CRLF.
-2. **Pruebas de punta a punta** (`tests/run_tests.sh`): ejecutan el sistema con una entrada simulada sobre un directorio temporal y verifican la salida. Cubren altas, validaciones (DNI, email, importes, fechas, largos), persistencia, numeración automática, estados, pagos, integridad al eliminar, paginado, reportes, entradas con CRLF y el bloqueo de instancia única.
+2. **Pruebas de punta a punta** (`tests/run_tests.sh`): ejecutan el sistema con una entrada simulada sobre un directorio temporal y verifican la salida. Cubren:
+   - altas, validaciones (DNI, email, importes, fechas, largos), cancelación con `*` y persistencia;
+   - numeración sin reutilizar números, estados, pagos e integridad al eliminar;
+   - búsqueda, estado de cuenta, paginado, reportes, comprobantes y CSV;
+   - textos con acentos, entradas con CRLF, ambas interfaces y el bloqueo de instancia única.
 
 La integración continua (GitHub Actions) corre estas mismas pruebas en cada push y pull request.
 
