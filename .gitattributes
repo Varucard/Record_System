@@ -1,0 +1,11 @@
+# Normaliza finales de línea a LF en el repositorio, sin importar el
+# sistema operativo (evita diffs gigantes por CRLF en Windows).
+* text=auto eol=lf
+
+*.cbl text eol=lf
+*.cpy text eol=lf
+*.sh  text eol=lf
+*.dat binary
+examples/tutorial/empleados.dat text eol=lf
+
+*.exe binary

@@ -1,26 +1,17 @@
        IDENTIFICATION DIVISION.
-       PROGRAM-ID. CREATE-FILES.
+       PROGRAM-ID. CREATE-INDEXED-FILE.
        ENVIRONMENT DIVISION.
        INPUT-OUTPUT SECTION.
-
+      *Archivo fÃ­sico en modo dinÃ¡mico.
        FILE-CONTROL.
-       SELECT OPTIONAL EMPLEADOS-ARCHIVO
-       ASSIGN TO "C:\Desarrollos\Record_System\empleados.dat"
-       ORGANIZATION IS LINE SEQUENTIAL.
+       COPY "PHYSICAL-FILE.cpy".
 
        DATA DIVISION.
        FILE SECTION.
-       FD EMPLEADOS-ARCHIVO.
-           01 EMPLEADOS-REGISTRO.
-               05 EMPLEADOS-ID PIC X(6).
-               05 EMPLEADOS-NOMBRE PIC X(25).
-               05 EMPLEADOS-APELLIDOS PIC X(35).
-               05 EMPLEADOS-EDAD PIC X(3).
-               05 EMPLEADOS-TELEFONO PIC X(9).
-               05 EMPLEADOS-DIRECCION PIC X(35).
+      *Archivo lÃ³gico.
+       COPY "LOGICAL-FILE.cpy".
 
        WORKING-STORAGE SECTION.
-
        01  IDENTIFICADOR PIC X(36)
            VALUE "Introduce un ID del nuevo empleado: ".
        01  NOMBRE PIC X(33)
@@ -29,29 +20,29 @@
            VALUE "Introduce los apellidos: ".
        01  EDAD PIC X(19)
            VALUE "Introduce la edad: ".
-       01  TELEFONO PIC X(33)
-           VALUE "Introduce un número de teléfono: ".
-       01  DIRECCION PIC X(25)
-           VALUE "Introduce una dirección: ".
+       01  TELEFONO PIC X(35)
+           VALUE "Introduce un nÃºmero de telÃ©fono: ".
+       01  DIRECCION PIC X(26)
+           VALUE "Introduce una direcciÃ³n: ".
 
        01  SI-NO PIC X.
        01  ENTRADA PIC X.
-
        PROCEDURE DIVISION.
        MAIN-LOGIC SECTION.
-       PROGRAM-BEGIN.
 
+       PROGRAM-BEGIN.
        PERFORM PROCEDIMIENTO-DE-APERTURA.
        MOVE "S" TO SI-NO.
        PERFORM AGREGAR-REGISTROS
        UNTIL SI-NO = "N".
        PERFORM PROCEDIMIENTO-DE-CIERRE.
 
-       PROGRAM-DONE.
+       FINALIZA-PROGRAMA.
        STOP RUN.
 
        PROCEDIMIENTO-DE-APERTURA.
-       OPEN EXTEND EMPLEADOS-ARCHIVO.
+
+       OPEN I-O EMPLEADOS-ARCHIVO.
 
        PROCEDIMIENTO-DE-CIERRE.
        CLOSE EMPLEADOS-ARCHIVO.
@@ -65,16 +56,16 @@
 
        OBTENER-CAMPOS.
        MOVE SPACE TO EMPLEADOS-REGISTRO.
-       DISPLAY IDENTIFICADOR " ? ".
+       DISPLAY IDENTIFICADOR.
        ACCEPT EMPLEADOS-ID.
-       DISPLAY NOMBRE " ? ".
+       DISPLAY NOMBRE.
        ACCEPT EMPLEADOS-NOMBRE.
-       DISPLAY APELLIDOS " ? ".
+       DISPLAY APELLIDOS.
        ACCEPT EMPLEADOS-APELLIDOS.
-       DISPLAY EDAD " ? ".
+       DISPLAY EDAD.
        ACCEPT EMPLEADOS-EDAD.
-       DISPLAY TELEFONO "?".
-       ACCEPT EMPLEADOS-TELEFONO
+       DISPLAY TELEFONO.
+       ACCEPT EMPLEADOS-TELEFONO.
        DISPLAY DIRECCION.
        ACCEPT EMPLEADOS-DIRECCION.
        PERFORM CONTINUAR.
@@ -88,11 +79,10 @@
        WRITE EMPLEADOS-REGISTRO.
 
        REINICIAR.
-       DISPLAY "¿Desea almacenar otro registro en la base de datos?".
+       DISPLAY "Â¿Desea almacenar otro registro en la base de datos?".
        ACCEPT SI-NO.
        IF SI-NO = "s"
        MOVE "S" TO SI-NO.
        IF SI-NO NOT = "S"
        MOVE "N" TO SI-NO.
-
-       END PROGRAM CREATE-FILES.
+       END PROGRAM CREATE-INDEXED-FILE.

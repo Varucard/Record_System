@@ -1,0 +1,9 @@
+.git
+.github
+bin
+data
+docs
+*.md
+Dockerfile
+backups
+docker-compose.yml

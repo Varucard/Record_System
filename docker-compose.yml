@@ -1,0 +1,17 @@
+# Ejecución interactiva:  docker compose run --rm record-system
+# Los archivos .dat quedan en ./data del proyecto.
+#
+# El contenedor corre con el usuario UID:GID indicado (1000:1000 por
+# defecto), que debe poder escribir en ./data. Si su usuario tiene
+# otro UID:  UID=$(id -u) GID=$(id -g) docker compose run --rm record-system
+services:
+  record-system:
+    build:
+      context: .
+      target: runtime
+    image: record-system:latest
+    stdin_open: true
+    tty: true
+    user: "${UID:-1000}:${GID:-1000}"
+    volumes:
+      - ./data:/data
