@@ -1,0 +1,18 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+
+# COBOL en formato fijo: el código va de la columna 8 a la 72.
+[*.{cbl,cpy}]
+max_line_length = 72
+
+[Makefile]
+indent_style = tab
+
+[*.md]
+trim_trailing_whitespace = false

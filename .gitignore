@@ -1,0 +1,26 @@
+# Binarios generados
+bin/
+*.exe
+*.o
+*.so
+*.dll
+
+# Datos de ejecución (archivos indexados de Berkeley DB y sus índices)
+data/*
+!data/.gitkeep
+*.dat
+*.dat.[0-9]*
+__db.*
+
+# Excepción: datos de ejemplo del tutorial
+!examples/tutorial/empleados.dat
+
+# Respaldos generados con make backup
+backups/
+
+# Editores / sistema operativo
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

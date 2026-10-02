@@ -4,13 +4,13 @@
        INPUT-OUTPUT SECTION.
 
        FILE-CONTROL.
-      *Archivo físico en modo dinámico.
-       COPY "PHYSICAL-FILE.cbl".
+      *Archivo fÃ­sico en modo dinÃ¡mico.
+       COPY "PHYSICAL-FILE.cpy".
 
        DATA DIVISION.
        FILE SECTION.
-      *Archivo lógico.
-       COPY "LOGICAL-FILE.cbl".
+      *Archivo lÃ³gico.
+       COPY "LOGICAL-FILE.cpy".
 
        WORKING-STORAGE SECTION.
        77  SI-A-ELIMINAR PIC X.
@@ -85,7 +85,7 @@
        DISPLAY "DIRECCION: " EMPLEADOS-DIRECCION.
 
        PREGUNTA-ELIMINAR.
-       DISPLAY "¿SEGURO QUE QUIERES ELIMINAR ESTE REGISTRO (S/N)?".
+       DISPLAY "Â¿SEGURO QUE QUIERES ELIMINAR ESTE REGISTRO (S/N)?".
        ACCEPT SI-A-ELIMINAR.
        IF SI-A-ELIMINAR= "s"
        MOVE "S" TO SI-A-ELIMINAR.
@@ -98,3 +98,5 @@
        DELETE EMPLEADOS-ARCHIVO RECORD
        INVALID KEY
        DISPLAY "Error eliminando el registro de empleados.".
+
+       END PROGRAM DELETE-FROM-INDEXED.
